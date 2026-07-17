@@ -1,0 +1,511 @@
+﻿<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Forty</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <aside id="sidebar">
+    <div class="brand">
+      <h1>FORTY</h1>
+      <button id="sidebarToggle" class="sidebar-toggle" type="button" title="Minimizar menu" aria-label="Minimizar menu">
+        <svg class="sidebar-toggle-icon" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <rect width="18" height="18" x="3" y="3" rx="2"></rect>
+          <path d="M9 3v18"></path>
+          <path d="m16 15-3-3 3-3"></path>
+        </svg>
+      </button>
+    </div>
+
+    <nav class="sidebar-nav">
+      <button data-view="orders" class="nav-link active">
+        <span class="nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 2h9l5 5v15H6z"></path><path d="M14 2v6h6"></path><path d="M9 13h6"></path><path d="M9 17h6"></path></svg></span>
+        <span class="nav-text">Pedidos e vales</span>
+      </button>
+
+      <div class="nav-group open">
+        <button type="button" class="nav-group-title" data-menu-toggle="operation">
+          <span class="nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 17h4V5H2v12h3"></path><path d="M19 17h3v-6l-3-4h-5"></path><circle cx="7.5" cy="17.5" r="2.5"></circle><circle cx="17.5" cy="17.5" r="2.5"></circle></svg></span>
+          <span class="nav-text">Operação</span>
+          <span class="nav-caret">›</span>
+        </button>
+        <div class="nav-submenu" data-menu="operation">
+          <button data-view="loads" class="nav-link sub-link"><span class="nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7h11v10H3z"></path><path d="M14 11h4l3 3v3h-7z"></path><circle cx="7" cy="18" r="2"></circle><circle cx="18" cy="18" r="2"></circle></svg></span><span class="nav-text">Cargas e entregas</span></button>
+        </div>
+      </div>
+
+      <div class="nav-group">
+        <button type="button" class="nav-group-title" data-menu-toggle="finance">
+          <span class="nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v18"></path><path d="M17 7H9.5a3.5 3.5 0 0 0 0 7H14a3.5 3.5 0 0 1 0 7H6"></path></svg></span>
+          <span class="nav-text">Financeiro</span>
+          <span class="nav-caret">›</span>
+        </button>
+        <div class="nav-submenu" data-menu="finance">
+          <button data-view="payables" class="nav-link sub-link"><span class="nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h16v16H4z"></path><path d="M8 9h8"></path><path d="M8 13h8"></path><path d="M8 17h5"></path></svg></span><span class="nav-text">Contas a pagar</span></button>
+          <button data-view="receivables" class="nav-link sub-link"><span class="nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v18"></path><path d="M17 7H9.5a3.5 3.5 0 0 0 0 7H14a3.5 3.5 0 0 1 0 7H6"></path></svg></span><span class="nav-text">Contas a receber</span></button>
+        </div>
+      </div>
+
+      <div class="nav-group">
+        <button type="button" class="nav-group-title" data-menu-toggle="registrations">
+          <span class="nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5h6"></path><path d="M9 3h6v4H9z"></path><path d="M5 5h14v16H5z"></path><path d="M8 12h8"></path><path d="M8 16h6"></path></svg></span>
+          <span class="nav-text">Cadastros</span>
+          <span class="nav-caret">›</span>
+        </button>
+        <div class="nav-submenu" data-menu="registrations">
+          <button data-view="customers" class="nav-link sub-link"><span class="nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"></circle><path d="M4 21a8 8 0 0 1 16 0"></path></svg></span><span class="nav-text">Clientes</span></button>
+          <button data-view="products" class="nav-link sub-link"><span class="nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 8a2 2 0 0 0-1-1.73L13 2.27a2 2 0 0 0-2 0L4 6.27A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><path d="M3.3 7 12 12l8.7-5"></path><path d="M12 22V12"></path></svg></span><span class="nav-text">Produtos</span></button>
+          <button data-view="sellers" class="nav-link sub-link"><span class="nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M19 8v6"></path><path d="M22 11h-6"></path></svg></span><span class="nav-text">Vendedores</span></button>
+          <button data-view="regions" class="nav-link sub-link"><span class="nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18 3 21V6l6-3 6 3 6-3v15l-6 3z"></path><path d="M9 3v15"></path><path d="M15 6v15"></path></svg></span><span class="nav-text">Regiões</span></button>
+          <button data-view="vehicles" class="nav-link sub-link"><span class="nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 13h18l-2-6H5z"></path><path d="M5 13v5"></path><path d="M19 13v5"></path><circle cx="7" cy="18" r="2"></circle><circle cx="17" cy="18" r="2"></circle></svg></span><span class="nav-text">Veículos</span></button>
+        </div>
+      </div>
+
+      <div class="nav-group">
+        <button type="button" class="nav-group-title" data-menu-toggle="reports">
+          <span class="nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3v18h18"></path><path d="M7 16v-5"></path><path d="M12 16V7"></path><path d="M17 16v-3"></path></svg></span>
+          <span class="nav-text">Relatórios</span>
+          <span class="nav-caret">›</span>
+        </button>
+        <div class="nav-submenu" data-menu="reports">
+          <button data-view="reportOrders" class="nav-link sub-link"><span class="nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 2h9l5 5v15H6z"></path><path d="M14 2v6h6"></path><path d="M9 13h6"></path><path d="M9 17h6"></path></svg></span><span class="nav-text">Pedidos e vales</span></button>
+          <button data-view="reportLoads" class="nav-link sub-link"><span class="nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 17h4V5H2v12h3"></path><path d="M19 17h3v-6l-3-4h-5"></path><circle cx="7.5" cy="17.5" r="2.5"></circle><circle cx="17.5" cy="17.5" r="2.5"></circle></svg></span><span class="nav-text">Cargas e entregas</span></button>
+          <button data-view="reportLoading" class="nav-link sub-link"><span class="nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16"></path><path d="M4 12h16"></path><path d="M4 17h10"></path><path d="M18 15l3 3-3 3"></path></svg></span><span class="nav-text">Carregamento</span></button>
+          <button data-view="reportCustomers" class="nav-link sub-link"><span class="nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"></circle><path d="M4 21a8 8 0 0 1 16 0"></path></svg></span><span class="nav-text">Clientes</span></button>
+          <button data-view="reportProducts" class="nav-link sub-link"><span class="nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 8a2 2 0 0 0-1-1.73L13 2.27a2 2 0 0 0-2 0L4 6.27A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><path d="M3.3 7 12 12l8.7-5"></path><path d="M12 22V12"></path></svg></span><span class="nav-text">Produtos</span></button>
+          
+        </div>
+      </div>
+    </nav>
+  </aside>
+
+  <main>
+    <div class="topbar">
+      <div class="topbar-spacer"></div>
+      <div class="notification-area">
+        <button id="notificationButton" class="notification-button" type="button" aria-expanded="false" aria-label="Notificações">
+          <svg class="bell-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
+          <span>Notificações</span>
+          <strong id="notificationBadge">0</strong>
+        </button>
+        <div id="notificationPanel" class="notification-panel" hidden>
+          <div class="notification-header">
+            <strong>Contas próximas</strong>
+            <span id="notificationSummary">Nenhum alerta</span>
+          </div>
+          <div id="notificationList" class="notification-list"></div>
+        </div>
+      </div>
+    </div>
+
+    <section id="orders" class="view active">
+      <header>
+        <div>
+          <h2>Pedido rapido</h2>
+          <p>Codigo do produto, quantidade e pronto. O preco vem do cadastro.</p>
+        </div>
+      </header>
+
+      <div id="metrics" class="metrics"></div>
+
+      <form id="orderForm" class="panel order-panel">
+        <div class="section-title wide">
+          <h3>Novo pedido</h3>
+          <span id="orderPreviewTotal">Total previsto R$ 0,00</span>
+        </div>
+
+        <label class="wide">Cliente
+          <input id="customerSearch" placeholder="Digite parte do nome ou CNPJ">
+          <span id="customerSelected" class="field-hint">Digite para filtrar a lista abaixo.</span>
+        </label>
+        <label class="wide order-customer-select">Lista de clientes encontrados
+          <select name="customerId" required></select>
+        </label>
+        <label>Vendedor<select name="sellerId"></select></label>
+        <label>Vencimento<input name="dueDate" type="date"></label>
+        <label class="check"><input name="isFiscalInvoiceRequested" type="checkbox"> Cliente quer NF-e</label>
+        <label class="wide">Observacoes<input name="notes" placeholder="ex: boleto Bradesco, entregar de manha"></label>
+
+        <div class="items wide">
+          <div class="row head"><span>Codigo</span><span>Qtd.</span><span>Produto encontrado</span><span></span></div>
+          <div id="itemRows"></div>
+          <button type="button" id="addItem">Adicionar item</button>
+        </div>
+
+        <button class="primary wide" type="submit">Salvar pedido</button>
+        <button class="wide" type="button" data-cancel-edit="order">Cancelar edição</button>
+      </form>
+
+      <div class="panel list-panel">
+        <div class="section-title wide">
+          <h3>Ultimos pedidos</h3>
+          <span>Use o vale para mostrar o formato de impressao</span>
+        </div>
+        <div id="ordersList" class="list"></div>
+      </div>
+    </section>
+
+    <section id="loads" class="view">
+      <header>
+        <div>
+          <h2>Programacao de rua</h2>
+          <p>Monte a carga por região, veículo e motorista. Depois faça a baixa da entrega.</p>
+        </div>
+      </header>
+
+      <form id="loadForm" class="panel">
+        <div class="section-title wide">
+          <h3>Nova carga</h3>
+          <span>Somente pedidos confirmados aparecem aqui</span>
+        </div>
+        <label>Data<input name="scheduledDate" type="date" required></label>
+        <label>Regiao<select name="regionId" required></select></label>
+        <label>Veiculo<select name="vehicleId"></select></label>
+        <label>Motorista<input name="driverName" placeholder="nome do entregador"></label>
+        <label class="wide">Observacoes<input name="notes"></label>
+        <div class="wide">
+          <h3>Pedidos disponiveis</h3>
+          <div id="loadOrderChoices" class="choices"></div>
+        </div>
+        <button class="primary wide" type="submit">Criar carga</button>
+        <button class="wide" type="button" data-cancel-edit="load">Cancelar edição</button>
+      </form>
+
+      <div class="panel list-panel">
+        <div class="section-title wide">
+          <h3>Cargas</h3>
+          <span>Saida, retorno e recebido ficam no mesmo lugar</span>
+        </div>
+        <div id="loadsList" class="list"></div>
+      </div>
+    </section>
+
+    <section id="reportOrders" class="view">
+      <header>
+        <div>
+          <h2>Relatório de pedidos e vales</h2>
+          <p>Filtre antes de gerar o PDF.</p>
+        </div>
+      </header>
+      <form class="panel report-filter-panel" data-report-form="orders">
+        <label>Cliente<input name="customer" placeholder="Nome ou CNPJ"></label>
+        <label>Status
+          <select name="status">
+            <option value="">Todos</option>
+            <option value="Pending">Pendente</option>
+            <option value="Confirmed">Confirmado</option>
+            <option value="Scheduled">Na carga</option>
+            <option value="Delivered">Entregue</option>
+            <option value="Returned">Retornou</option>
+            <option value="Cancelled">Cancelado</option>
+          </select>
+        </label>
+        <label>Tipo
+          <select name="invoiceType">
+            <option value="">Todos</option>
+            <option value="vale">Vale interno</option>
+            <option value="nfe">NF-e</option>
+          </select>
+        </label>
+        <label>Vencimento inicial<input name="from" type="date"></label>
+        <label>Vencimento final<input name="to" type="date"></label>
+        <button class="primary" type="button" data-report="orders">Gerar PDF</button>
+      </form>
+    </section>
+
+    <section id="reportLoads" class="view">
+      <header>
+        <div>
+          <h2>Relatório de cargas e entregas</h2>
+          <p>Filtre por região, status e período de saída.</p>
+        </div>
+      </header>
+      <form class="panel report-filter-panel" data-report-form="loads">
+        <label>Região<select name="regionId" data-report-region></select></label>
+        <label>Status
+          <select name="status">
+            <option value="">Todos</option>
+            <option value="Open">Aberta</option>
+            <option value="Dispatched">Na rua</option>
+            <option value="Closed">Fechada</option>
+          </select>
+        </label>
+        <label>Data inicial<input name="from" type="date"></label>
+        <label>Data final<input name="to" type="date"></label>
+        <button class="primary" type="button" data-report="loads">Gerar PDF</button>
+      </form>
+    </section>
+
+    <section id="reportLoading" class="view">
+      <header>
+        <div>
+          <h2>Relatório de carregamento</h2>
+          <p>Modelo para expedição, agrupado por região.</p>
+        </div>
+      </header>
+      <form class="panel report-filter-panel" data-report-form="loading">
+        <label>Região<select name="regionId" data-report-region></select></label>
+        <label>Data inicial<input name="from" type="date"></label>
+        <label>Data final<input name="to" type="date"></label>
+        <button class="primary" type="button" data-report="loading">Gerar PDF</button>
+      </form>
+    </section>
+
+    <section id="reportCustomers" class="view">
+      <header>
+        <div>
+          <h2>Relatório de clientes</h2>
+          <p>Busque por nome, CNPJ, cidade, telefone ou região.</p>
+        </div>
+      </header>
+      <form class="panel report-filter-panel" data-report-form="customers">
+        <label>Busca<input name="search" placeholder="Nome, CNPJ, cidade ou telefone"></label>
+        <label>Região<select name="regionId" data-report-region></select></label>
+        <button class="primary" type="button" data-report="customers">Gerar PDF</button>
+      </form>
+    </section>
+
+    <section id="reportProducts" class="view">
+      <header>
+        <div>
+          <h2>Relatório de produtos</h2>
+          <p>Busque por código, nome, NCM, CEST ou código de barras.</p>
+        </div>
+      </header>
+      <form class="panel report-filter-panel" data-report-form="products">
+        <label class="wide">Busca<input name="search" placeholder="Código, produto, NCM ou CEST"></label>
+        <button class="primary" type="button" data-report="products">Gerar PDF</button>
+      </form>
+    </section>
+    <section id="payables" class="view">
+      <header>
+        <div>
+          <h2>Contas a pagar</h2>
+          <p>Cadastre, edite, remova e dê baixa nas contas da empresa.</p>
+        </div>
+      </header>
+      <div class="split">
+        <div class="panel list-panel">
+          <div class="section-title wide">
+            <h3>Lista de contas a pagar</h3>
+            <span id="payablesCount"></span>
+          </div>
+          <div id="payablesList" class="list compact-list"></div>
+        </div>
+        <form id="payableForm" class="panel">
+          <h3 class="wide">Nova conta a pagar</h3>
+          <label class="wide">Descrição<input name="description" required></label>
+          <label>Fornecedor<input name="supplierName"></label>
+          <label>Vencimento<input name="dueDate" type="date" required></label>
+          <label>Valor<input name="amount" type="number" step="0.01" required></label>
+          <label class="wide">Observação<input name="notes"></label>
+          <button class="primary wide" type="submit">Cadastrar conta a pagar</button>
+          <button class="wide" type="button" data-cancel-edit="payable">Cancelar edição</button>
+        </form>
+      </div>
+    </section>
+
+    <section id="receivables" class="view">
+      <header>
+        <div>
+          <h2>Contas a receber</h2>
+          <p>Cadastre, edite, remova e dê baixa nos recebimentos.</p>
+        </div>
+      </header>
+      <div class="split">
+        <div class="panel list-panel">
+          <div class="section-title wide">
+            <h3>Lista de contas a receber</h3>
+            <span id="receivablesCount"></span>
+          </div>
+          <div id="receivablesList" class="list compact-list"></div>
+        </div>
+        <form id="receivableForm" class="panel">
+          <h3 class="wide">Nova conta a receber</h3>
+          <label class="wide">Descrição<input name="description" required></label>
+          <label>Cliente<select name="customerId"></select></label>
+          <label>Pedido nº<input name="orderNumber" type="number"></label>
+          <label>Vencimento<input name="dueDate" type="date" required></label>
+          <label>Valor<input name="amount" type="number" step="0.01" required></label>
+          <label class="wide">Observação<input name="notes"></label>
+          <button class="primary wide" type="submit">Cadastrar conta a receber</button>
+          <button class="wide" type="button" data-cancel-edit="receivable">Cancelar edição</button>
+        </form>
+      </div>
+    </section>
+    <section id="customers" class="view">
+      <header>
+        <div>
+          <h2>Clientes</h2>
+          <p>Consulte os clientes importados e cadastre novos clientes quando precisar.</p>
+        </div>
+      </header>
+      <div class="split">
+        <div class="panel list-panel">
+          <div class="section-title wide">
+            <h3>Lista de clientes</h3>
+            <span id="customersCount"></span>
+          </div>
+          <input class="filter-input" data-filter="customers" placeholder="Filtrar por nome, CNPJ, cidade ou telefone">
+          <div id="customersList" class="list compact-list"></div>
+        </div>
+        <form id="customerForm" class="panel">
+          <h3 class="wide">Novo cliente</h3>
+          <label class="wide">Razao social<input name="legalName" required></label>
+          <label>CNPJ<input name="taxId" required></label>
+          <label>Telefone<input name="phone"></label>
+          <label class="wide">Email<input name="email"></label>
+          <label class="span-2">Rua<input name="street" required></label>
+          <label>Numero<input name="number" required></label>
+          <label>Bairro<input name="district" required></label>
+          <label>Cidade<input name="city" required></label>
+          <label>UF<input name="state" value="SP" maxlength="2" required></label>
+          <label>CEP<input name="postalCode" required></label>
+          <label>Regiao<select name="regionId" required></select></label>
+          <label>Vendedor<select name="sellerId" required></select></label>
+          <button class="primary wide" type="submit">Cadastrar cliente</button>
+          <button class="wide" type="button" data-cancel-edit="customer">Cancelar edição</button>
+        </form>
+      </div>
+    </section>
+
+    <section id="products" class="view">
+      <header>
+        <div>
+          <h2>Produtos</h2>
+          <p>Produtos importados do Omie com preco por caixa/fardo, NCM, CEST e codigos de barra.</p>
+        </div>
+      </header>
+      <div class="split">
+        <div class="panel list-panel">
+          <div class="section-title wide">
+            <h3>Lista de produtos</h3>
+            <span id="productsCount"></span>
+          </div>
+          <input class="filter-input" data-filter="products" placeholder="Filtrar por codigo, nome, NCM ou CEST">
+          <div id="productsList" class="list compact-list"></div>
+        </div>
+        <form id="productForm" class="panel">
+          <h3 class="wide">Novo produto</h3>
+          <label>Codigo<input name="code" required></label>
+          <label class="span-2">Nome<input name="name" required></label>
+          <label>Unidade<input name="unit" value="FD" required></label>
+          <label>Preco caixa/fardo<input name="salePrice" type="number" step="0.01" required></label>
+          <label>Peso kg<input name="weightInKg" type="number" step="0.001" value="0"></label>
+          <label>NCM<input name="ncm"></label>
+          <label>CEST<input name="cest"></label>
+          <label>CFOP<input name="cfop"></label>
+          <button class="primary wide" type="submit">Cadastrar produto</button>
+          <button class="wide" type="button" data-cancel-edit="product">Cancelar edição</button>
+        </form>
+      </div>
+    </section>
+
+    <section id="sellers" class="view">
+      <header>
+        <div>
+          <h2>Vendedores</h2>
+          <p>Identifique o vendedor no pedido e facilite acerto/comissao depois.</p>
+        </div>
+      </header>
+      <div class="split">
+        <div class="panel list-panel">
+          <div class="section-title wide">
+            <h3>Lista de vendedores</h3>
+            <span id="sellersCount"></span>
+          </div>
+          <input class="filter-input" data-filter="sellers" placeholder="Filtrar por codigo ou nome">
+          <div id="sellersList" class="list compact-list"></div>
+        </div>
+        <form id="sellerForm" class="panel">
+          <h3 class="wide">Novo vendedor</h3>
+          <label>Codigo<input name="code" required></label>
+          <label>Nome<input name="name" required></label>
+          <label>Comissão %<input name="defaultCommissionPercentage" type="number" step="0.01"></label>
+          <button class="primary wide" type="submit">Cadastrar vendedor</button>
+          <button class="wide" type="button" data-cancel-edit="seller">Cancelar edição</button>
+        </form>
+      </div>
+    </section>
+
+    <section id="regions" class="view">
+      <header>
+        <div>
+          <h2>Regioes</h2>
+          <p>Use regioes para separar pedidos por rota, cidade ou area de entrega.</p>
+        </div>
+      </header>
+      <div class="split">
+        <div class="panel list-panel">
+          <div class="section-title wide">
+            <h3>Lista de regioes</h3>
+            <span id="regionsCount"></span>
+          </div>
+          <input class="filter-input" data-filter="regions" placeholder="Filtrar por nome">
+          <div id="regionsList" class="list compact-list"></div>
+        </div>
+        <form id="regionForm" class="panel">
+          <h3 class="wide">Nova região</h3>
+          <label class="wide">Nome<input name="name" placeholder="Osasco" required></label>
+          <button class="primary wide" type="submit">Cadastrar região</button>
+          <button class="wide" type="button" data-cancel-edit="region">Cancelar edição</button>
+        </form>
+      </div>
+    </section>
+
+    <section id="vehicles" class="view">
+      <header>
+        <div>
+          <h2>Veiculos</h2>
+          <p>Cadastre caminhões, vans e carros usados na saída pra rua.</p>
+        </div>
+      </header>
+      <div class="split">
+        <div class="panel list-panel">
+          <div class="section-title wide">
+            <h3>Lista de veículos</h3>
+            <span id="vehiclesCount"></span>
+          </div>
+          <input class="filter-input" data-filter="vehicles" placeholder="Filtrar por nome, placa ou modelo">
+          <div id="vehiclesList" class="list compact-list"></div>
+        </div>
+        <form id="vehicleForm" class="panel">
+          <h3 class="wide">Novo veículo</h3>
+          <label>Nome<input name="name" placeholder="Kangoo Lucas" required></label>
+          <label>Placa<input name="plate" required></label>
+          <label class="wide">Modelo<input name="model"></label>
+          <button class="primary wide" type="submit">Cadastrar veículo</button>
+          <button class="wide" type="button" data-cancel-edit="vehicle">Cancelar edição</button>
+        </form>
+      </div>
+    </section>
+  </main>
+
+  <div id="valeModal" class="modal" aria-hidden="true">
+    <div class="modal-card">
+      <div class="modal-actions">
+        <button id="printVale">Imprimir</button>
+        <button id="closeVale">Fechar</button>
+      </div>
+      <div id="valeContent"></div>
+    </div>
+  </div>
+
+  <div id="editModal" class="modal" aria-hidden="true">
+    <div class="modal-card edit-modal-card">
+      <div class="modal-actions edit-modal-actions">
+        <strong id="editModalTitle">Editar item</strong>
+        <button id="closeEditModal" type="button">Fechar</button>
+      </div>
+      <div id="editModalBody" class="edit-modal-body"></div>
+    </div>
+  </div>
+
+  <div id="toast"></div>
+  <script src="config.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
+

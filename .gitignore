@@ -1,0 +1,17 @@
+bin/
+obj/
+artifacts/
+.vs/
+.vscode/
+*.user
+*.suo
+*.db
+*.sqlite
+*.sqlite3
+
+# Logs
+*.log
+
+# Local environment files
+.env
+.env.*
