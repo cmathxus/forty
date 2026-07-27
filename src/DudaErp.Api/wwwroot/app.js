@@ -342,16 +342,83 @@ function renderMetrics() {
   const ordersTotal = state.orders.reduce((sum, order) => sum + Number(order.totalAmount || 0), 0);
   const loadsOnStreet = state.loads.filter(load => load.status === "Dispatched").length;
   const pendingOrders = state.orders.filter(order => order.status === "Confirmed").length;
+  const metrics = $("#metrics");
 
-  $("#metrics").innerHTML = `
-    <div class="metric"><span>Clientes ativos</span><strong>${state.customers.filter(x => x.isActive).length}</strong></div>
-    <div class="metric"><span>Produtos ativos</span><strong>${state.products.filter(x => x.isActive).length}</strong></div>
-    <div class="metric"><span>Pedidos pendentes</span><strong>${pendingOrders}</strong></div>
-    <div class="metric"><span>Total dos pedidos</span><strong>${money(ordersTotal)}</strong></div>
-  `;
+  if (metrics) {
+    metrics.innerHTML = `
+      <div class="metric"><span>Clientes ativos</span><strong>${state.customers.filter(x => x.isActive).length}</strong></div>
+      <div class="metric"><span>Produtos ativos</span><strong>${state.products.filter(x => x.isActive).length}</strong></div>
+      <div class="metric"><span>Pedidos pendentes</span><strong>${pendingOrders}</strong></div>
+      <div class="metric"><span>Total dos pedidos</span><strong>${money(ordersTotal)}</strong></div>
+    `;
+  }
 
   const loadMetric = loadsOnStreet ? `${loadsOnStreet} carga(s) na rua` : "Nenhuma carga na rua";
   document.title = `Forty - ${loadMetric}`;
+  renderDashboard();
+}
+
+function renderDashboard() {
+  const actions = $("#dashboardActions");
+  const recent = $("#dashboardRecentOrders");
+  if (!actions || !recent) return;
+
+  const pendingOrders = state.orders.filter(order => order.status === "Confirmed");
+  const loadsOnStreet = state.loads.filter(load => load.status === "Dispatched");
+  const duePayables = state.payables
+    .filter(item => item.status === "Open")
+    .map(item => ({ ...item, days: daysUntil(item.dueDate) }))
+    .filter(item => item.days <= 7)
+    .sort((a, b) => a.days - b.days);
+
+  const actionRows = [
+    ...pendingOrders.slice(0, 3).map(order => ({
+      title: `Pedido ${order.number} aguardando carga`,
+      meta: `${order.customer?.legalName ?? "Cliente"} · ${money(order.totalAmount)}`,
+      view: "loads"
+    })),
+    ...loadsOnStreet.slice(0, 3).map(load => ({
+      title: `Carga ${load.number} está na rua`,
+      meta: `${load.region?.name ?? "Região"} · ${load.orders.length} pedido(s)`,
+      view: "loads"
+    })),
+    ...duePayables.slice(0, 3).map(item => ({
+      title: item.days < 0 ? `Conta vencida: ${item.description}` : `Conta próxima: ${item.description}`,
+      meta: `${money(item.amount)} · vence ${dateBR(item.dueDate)}`,
+      view: "payables"
+    }))
+  ].slice(0, 6);
+
+  $("#dashboardActionCount").textContent = actionRows.length ? `${actionRows.length} item(s)` : "Tudo em ordem";
+  actions.innerHTML = actionRows.map(item => `
+    <button class="dashboard-row" type="button" data-view-shortcut="${item.view}">
+      <span>
+        <strong>${escapeHtml(item.title)}</strong>
+        <small>${escapeHtml(item.meta)}</small>
+      </span>
+      <span class="row-arrow">›</span>
+    </button>
+  `).join("") || `
+    <div class="empty-state">
+      <strong>Nada urgente agora</strong>
+      <span>Quando tiver pedido pendente, carga na rua ou conta vencendo, aparece aqui.</span>
+    </div>
+  `;
+
+  recent.innerHTML = state.orders.slice(0, 6).map(order => `
+    <button class="dashboard-row" type="button" data-view-shortcut="orders">
+      <span>
+        <strong>Pedido ${order.number} · ${money(order.totalAmount)}</strong>
+        <small>${escapeHtml(order.customer?.legalName ?? "Cliente")} · ${escapeHtml(order.seller?.name ?? "Vendedor")} · ${escapeHtml(order.status)}</small>
+      </span>
+      ${statusBadge(order.status)}
+    </button>
+  `).join("") || `
+    <div class="empty-state">
+      <strong>Nenhum pedido lançado</strong>
+      <span>Use “Novo pedido” para começar o fluxo.</span>
+    </div>
+  `;
 }
 
 function renderOrders() {
@@ -1534,7 +1601,7 @@ function reportLoads(filters = {}) {
     title: "Relatório de cargas e entregas",
     body: `
       <table>
-        <thead><tr><th>Carga</th><th>Data</th><th>Regiao</th><th>Veiculo</th><th>Motorista</th><th>Status</th><th>Pedidos</th><th class="right">Total</th><th class="right">Recebido</th></tr></thead>
+        <thead><tr><th>Carga</th><th>Data</th><th>Região</th><th>Veículo</th><th>Motorista</th><th>Status</th><th>Pedidos</th><th class="right">Total</th><th class="right">Recebido</th></tr></thead>
         <tbody>
           ${loads.map(load => {
             const total = load.orders.reduce((sum, item) => sum + Number(item.order?.totalAmount ?? 0), 0);
@@ -1570,7 +1637,7 @@ function reportSingleLoad(id) {
     body: `
       <div class="summary">
         <div><strong>Data</strong><br>${dateBR(load.scheduledDate)}</div>
-        <div><strong>Veiculo</strong><br>${escapeHtml(load.vehicle ? `${load.vehicle.name} - ${load.vehicle.plate}` : "-")}</div>
+        <div><strong>Veículo</strong><br>${escapeHtml(load.vehicle ? `${load.vehicle.name} - ${load.vehicle.plate}` : "-")}</div>
         <div><strong>Motorista</strong><br>${escapeHtml(load.driverName ?? "-")}</div>
         <div><strong>Total</strong><br>${money(total)}</div>
         <div><strong>Recebido</strong><br>${money(received)}</div>
@@ -1654,7 +1721,7 @@ function renderLoadingLoadBody(load, showLoadTitle) {
       <div class="summary">
         <div><strong>Carregamento</strong><br>${load.number} - ${escapeHtml(load.region?.name ?? "")}</div>
         <div><strong>Data</strong><br>${dateBR(load.scheduledDate)}</div>
-        <div><strong>Veiculo</strong><br>${escapeHtml(load.vehicle ? `${load.vehicle.name} - ${load.vehicle.plate}` : "-")}</div>
+        <div><strong>Veículo</strong><br>${escapeHtml(load.vehicle ? `${load.vehicle.name} - ${load.vehicle.plate}` : "-")}</div>
         <div><strong>Motorista</strong><br>${escapeHtml(load.driverName ?? "-")}</div>
       </div>
       ${load.orders.map(item => {
@@ -1708,7 +1775,7 @@ function reportCustomers(filters = {}) {
     title: "Relatório de clientes",
     body: `
       <table>
-        <thead><tr><th>Cliente</th><th>CNPJ</th><th>Cidade/UF</th><th>Regiao</th><th>Telefone</th></tr></thead>
+        <thead><tr><th>Cliente</th><th>CNPJ</th><th>Cidade/UF</th><th>Região</th><th>Telefone</th></tr></thead>
         <tbody>
           ${rows.map(customer => `
             <tr>
@@ -1739,7 +1806,7 @@ function reportProducts(filters = {}) {
     title: "Relatório de produtos",
     body: `
       <table>
-        <thead><tr><th>Codigo</th><th>Produto</th><th>Un.</th><th class="right">Preco</th><th>NCM</th><th>CEST</th><th>DUN</th></tr></thead>
+        <thead><tr><th>Código</th><th>Produto</th><th>Un.</th><th class="right">Preço</th><th>NCM</th><th>CEST</th><th>DUN</th></tr></thead>
         <tbody>
           ${rows.map(product => `
             <tr>
