@@ -21,6 +21,7 @@ public sealed class Order : Entity
     public OrderStatus Status { get; set; } = OrderStatus.Confirmed;
     public bool IsFiscalInvoiceRequested { get; set; }
     public DateOnly? DueDate { get; set; }
+    public string? PaymentCondition { get; set; }
     public string? Notes { get; set; }
     public decimal TotalAmount { get; set; }
     public decimal TotalWeightInKg { get; set; }

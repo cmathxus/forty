@@ -55,6 +55,8 @@ public sealed class CatalogController(AppDbContext dbContext) : ControllerBase
         {
             Code = request.Code.Trim(),
             Name = request.Name.Trim(),
+            Email = request.Email?.Trim(),
+            Phone = request.Phone?.Trim(),
             DefaultCommissionPercentage = request.DefaultCommissionPercentage
         };
         dbContext.Sellers.Add(seller);
@@ -74,6 +76,8 @@ public sealed class CatalogController(AppDbContext dbContext) : ControllerBase
 
         seller.Code = request.Code.Trim();
         seller.Name = request.Name.Trim();
+        seller.Email = request.Email?.Trim();
+        seller.Phone = request.Phone?.Trim();
         seller.DefaultCommissionPercentage = request.DefaultCommissionPercentage;
         seller.IsActive = true;
         seller.UpdatedAt = DateTimeOffset.UtcNow;

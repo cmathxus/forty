@@ -117,10 +117,11 @@ public sealed class OrdersController(AppDbContext dbContext, OrderService orderS
             Customer = order.Customer,
             Seller = order.Seller,
             order.DueDate,
+            order.PaymentCondition,
             order.TotalWeightInKg,
             order.TotalAmount,
             order.Items,
-            Label = order.IsFiscalInvoiceRequested ? "Pedido para NF-e" : "Vale interno"
+            Label = order.IsFiscalInvoiceRequested ? "Pedido para NF-e" : "Executado"
         });
     }
 }

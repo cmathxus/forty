@@ -7,7 +7,9 @@ public sealed record CreateRegionRequest([Required, MaxLength(100)] string Name)
 public sealed record CreateSellerRequest(
     [Required, MaxLength(30)] string Code,
     [Required, MaxLength(150)] string Name,
-    [Range(0, 100)] decimal? DefaultCommissionPercentage);
+    [Range(0, 100)] decimal? DefaultCommissionPercentage,
+    [EmailAddress, MaxLength(200)] string? Email = null,
+    [MaxLength(40)] string? Phone = null);
 
 public sealed record CreateProductRequest(
     [Required, MaxLength(50)] string Code,
@@ -47,7 +49,9 @@ public sealed record CreateCustomerRequest(
 
 public sealed record CreateOrderItemRequest(
     [Required] string ProductCode,
-    [Range(0.001, double.MaxValue)] decimal Quantity);
+    [Range(0.001, double.MaxValue)] decimal Quantity,
+    [Range(0.01, double.MaxValue)] decimal? UnitPrice = null,
+    [Range(0.01, double.MaxValue)] decimal? TotalAmount = null);
 
 public sealed record CreateOrderRequest(
     Guid CustomerId,
@@ -55,7 +59,8 @@ public sealed record CreateOrderRequest(
     bool IsFiscalInvoiceRequested,
     DateOnly? DueDate,
     string? Notes,
-    [MinLength(1)] IReadOnlyCollection<CreateOrderItemRequest> Items);
+    [MinLength(1)] IReadOnlyCollection<CreateOrderItemRequest> Items,
+    [MaxLength(40)] string? PaymentCondition = null);
 
 public sealed record CreateVehicleRequest(
     [Required, MaxLength(100)] string Name,

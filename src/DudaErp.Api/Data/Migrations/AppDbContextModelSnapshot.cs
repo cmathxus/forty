@@ -17,7 +17,7 @@ namespace DudaErp.Api.Data.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "9.0.4")
+                .HasAnnotation("ProductVersion", "8.0.17")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
@@ -304,6 +304,10 @@ namespace DudaErp.Api.Data.Migrations
                     b.Property<long>("Number")
                         .HasColumnType("bigint");
 
+                    b.Property<string>("PaymentCondition")
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)");
+
                     b.Property<Guid>("SellerId")
                         .HasColumnType("uuid");
 
@@ -513,12 +517,20 @@ namespace DudaErp.Api.Data.Migrations
                     b.Property<decimal?>("DefaultCommissionPercentage")
                         .HasColumnType("numeric");
 
+                    b.Property<string>("Email")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
                     b.Property<bool>("IsActive")
                         .HasColumnType("boolean");
 
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasColumnType("text");
+
+                    b.Property<string>("Phone")
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)");
 
                     b.Property<DateTimeOffset>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");

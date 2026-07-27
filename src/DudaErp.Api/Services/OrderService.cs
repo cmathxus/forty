@@ -41,12 +41,14 @@ public sealed class OrderService(AppDbContext dbContext)
             SellerId = sellerId,
             IsFiscalInvoiceRequested = request.IsFiscalInvoiceRequested,
             DueDate = request.DueDate,
+            PaymentCondition = request.PaymentCondition?.Trim(),
             Notes = request.Notes?.Trim()
         };
 
         foreach (var requestedItem in request.Items)
         {
             var product = products[requestedItem.ProductCode.Trim()];
+            var (unitPrice, totalAmount) = ResolvePricing(product, requestedItem);
             var item = new OrderItem
             {
                 OrderId = order.Id,
@@ -55,9 +57,9 @@ public sealed class OrderService(AppDbContext dbContext)
                 ProductName = product.Name,
                 Unit = product.Unit,
                 Quantity = requestedItem.Quantity,
-                UnitPrice = product.SalePrice,
+                UnitPrice = unitPrice,
                 UnitWeightInKg = product.WeightInKg,
-                TotalAmount = decimal.Round(product.SalePrice * requestedItem.Quantity, 2)
+                TotalAmount = totalAmount
             };
 
             order.Items.Add(item);
@@ -114,6 +116,7 @@ public sealed class OrderService(AppDbContext dbContext)
         order.SellerId = sellerId;
         order.IsFiscalInvoiceRequested = request.IsFiscalInvoiceRequested;
         order.DueDate = request.DueDate;
+        order.PaymentCondition = request.PaymentCondition?.Trim();
         order.Notes = request.Notes?.Trim();
         order.Status = OrderStatus.Confirmed;
         order.UpdatedAt = DateTimeOffset.UtcNow;
@@ -122,6 +125,7 @@ public sealed class OrderService(AppDbContext dbContext)
         foreach (var requestedItem in request.Items)
         {
             var product = products[requestedItem.ProductCode.Trim()];
+            var (unitPrice, totalAmount) = ResolvePricing(product, requestedItem);
             newItems.Add(new OrderItem
             {
                 OrderId = order.Id,
@@ -130,9 +134,9 @@ public sealed class OrderService(AppDbContext dbContext)
                 ProductName = product.Name,
                 Unit = product.Unit,
                 Quantity = requestedItem.Quantity,
-                UnitPrice = product.SalePrice,
+                UnitPrice = unitPrice,
                 UnitWeightInKg = product.WeightInKg,
-                TotalAmount = decimal.Round(product.SalePrice * requestedItem.Quantity, 2)
+                TotalAmount = totalAmount
             });
         }
 
@@ -148,5 +152,21 @@ public sealed class OrderService(AppDbContext dbContext)
     {
         var lastNumber = await dbContext.Orders.MaxAsync(x => (long?)x.Number, cancellationToken);
         return (lastNumber ?? -1) + 1;
+    }
+
+    private static (decimal UnitPrice, decimal TotalAmount) ResolvePricing(Product product, CreateOrderItemRequest item)
+    {
+        var totalAmount = item.TotalAmount is > 0
+            ? decimal.Round(item.TotalAmount.Value, 2)
+            : (decimal?)null;
+
+        var unitPrice = item.UnitPrice is > 0
+            ? decimal.Round(item.UnitPrice.Value, 2)
+            : totalAmount is > 0 && item.Quantity > 0
+                ? decimal.Round(totalAmount.Value / item.Quantity, 2)
+                : decimal.Round(product.SalePrice, 2);
+
+        totalAmount ??= decimal.Round(unitPrice * item.Quantity, 2);
+        return (unitPrice, totalAmount.Value);
     }
 }

@@ -32,10 +32,21 @@ const PaymentMethod = {
   Other: 7
 };
 
+const paymentTerms = {
+  "À vista": 0,
+  "7 dias": 7,
+  "15 dias": 15,
+  "28 ddl": 28,
+  "30/60 ddl": 30,
+  "30 ddl": 30,
+  "45 ddl": 45
+};
+
 const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
 const money = value => Number(value || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 const dateBR = value => value ? new Date(`${value}T00:00:00`).toLocaleDateString("pt-BR") : "-";
+const dateTimeToDateOnly = value => value ? new Date(value).toISOString().slice(0, 10) : null;
 const normalize = value => String(value ?? "").toLowerCase();
 const apiBaseUrl = String(window.FORTY_CONFIG?.apiBaseUrl ?? "").replace(/\/$/, "");
 
@@ -157,6 +168,10 @@ async function refreshCatalog() {
   fillSelect("[data-report-region]", regions.filter(x => x.isActive), x => x.name, true);
   $$("[data-report-region] option[value='']").forEach(option => option.textContent = "Todas");
   fillSelect("#orderForm select[name='sellerId']", sellers.filter(x => x.isActive), x => `${x.code} - ${x.name}`, true);
+  fillSelect("[data-report-seller]", sellers.filter(x => x.isActive), x => `${x.code} - ${x.name}`, true);
+  $$("[data-report-seller] option[value='']").forEach(option => option.textContent = "Todos");
+  fillSelect("[data-report-product]", products.filter(x => x.isActive), x => `${x.code} - ${x.name}`, true);
+  $$("[data-report-product] option[value='']").forEach(option => option.textContent = "Todos");
   fillSelect("#customerForm select[name='sellerId']", sellers.filter(x => x.isActive), x => `${x.code} - ${x.name}`);
   fillSelect("select[name='vehicleId']", vehicles.filter(x => x.isActive), x => `${x.name} - ${x.plate}`, true);
   fillSelect("#receivableForm select[name='customerId']", customers.filter(x => x.isActive), x => x.legalName, true);
@@ -255,12 +270,13 @@ function renderProductsList() {
 
 function renderSellersList() {
   const term = getFilter("sellers");
-  const rows = state.sellers.filter(seller => seller.isActive && matches(seller, term, [x => x.code, x => x.name]));
+  const rows = state.sellers.filter(seller => seller.isActive && matches(seller, term, [x => x.code, x => x.name, x => x.email, x => x.phone]));
   $("#sellersCount").textContent = `${rows.length} de ${state.sellers.filter(x => x.isActive).length}`;
   $("#sellersList").innerHTML = rows.map(seller => `
     <div class="mini-card">
       <strong>${seller.code} - ${seller.name}</strong>
       <div class="meta">Comissão padrão: ${seller.defaultCommissionPercentage ?? 0}%</div>
+      <div class="meta">${seller.email || "sem email"} | ${seller.phone || "sem telefone"}</div>
       <div class="card-actions">
         <button type="button" data-edit-seller="${seller.id}">Editar</button>
         <button type="button" data-delete-seller="${seller.id}">Excluir</button>
@@ -355,12 +371,12 @@ function renderOrders() {
         <div>
           <strong>Pedido ${order.number} - ${money(order.totalAmount)}</strong>
           <div class="meta">${order.customer?.legalName ?? "Cliente"} | ${order.seller?.name ?? "Vendedor"}</div>
-          <div class="meta">${order.isFiscalInvoiceRequested ? "Pedido para NF-e" : "Vale interno"} | Peso ${Number(order.totalWeightInKg || 0).toFixed(3)} kg</div>
+          <div class="meta">${order.isFiscalInvoiceRequested ? "Pedido para NF-e" : "Executado"} | ${order.paymentCondition || "sem condição"} | Peso ${Number(order.totalWeightInKg || 0).toFixed(3)} kg</div>
         </div>
         ${statusBadge(order.status)}
       </div>
       <div class="card-actions">
-        <button type="button" data-vale="${order.id}">Ver vale</button>
+        <button type="button" data-vale="${order.id}">Ver executado</button>
         <button type="button" data-edit-order="${order.id}">Editar</button>
         <button type="button" data-delete-order="${order.id}">Excluir</button>
       </div>
@@ -597,6 +613,8 @@ function addItemRow() {
   row.innerHTML = `
     <input name="productCode" placeholder="4300" required>
     <input name="quantity" type="number" step="0.001" min="0.001" value="1" required>
+    <input name="unitPrice" type="number" step="0.01" min="0.01" placeholder="auto">
+    <input name="totalAmount" type="number" step="0.01" min="0.01" placeholder="auto">
     <div class="product-hint">Digite o codigo</div>
     <button type="button">Remover</button>
   `;
@@ -604,17 +622,21 @@ function addItemRow() {
     row.remove();
     refreshProductHints();
   });
-  $$("input", row).forEach(input => input.addEventListener("input", refreshProductHints));
+  $("input[name='unitPrice']", row).addEventListener("input", () => row.dataset.manualUnitPrice = "true");
+  $("input[name='totalAmount']", row).addEventListener("input", () => row.dataset.manualTotal = "true");
+  $$("input", row).forEach(input => input.addEventListener("input", () => refreshProductHints(input)));
   $("#itemRows").append(row);
   refreshProductHints();
 }
 
-function refreshProductHints() {
+function refreshProductHints(source = null) {
   let total = 0;
 
   $$(".item-row").forEach(row => {
     const code = $("input[name='productCode']", row).value.trim();
     const quantity = Number($("input[name='quantity']", row).value || 0);
+    const unitPriceInput = $("input[name='unitPrice']", row);
+    const totalInput = $("input[name='totalAmount']", row);
     const hint = $(".product-hint", row);
     const product = state.products.find(x => x.code.toLowerCase() === code.toLowerCase());
 
@@ -630,9 +652,25 @@ function refreshProductHints() {
       return;
     }
 
-    const lineTotal = quantity * Number(product.salePrice || 0);
+    if (!unitPriceInput.value && row.dataset.manualUnitPrice !== "true") {
+      unitPriceInput.value = Number(product.salePrice || 0).toFixed(2);
+    }
+
+    if (source === unitPriceInput) {
+      row.dataset.manualTotal = "false";
+    }
+
+    const unitPrice = Number(unitPriceInput.value || product.salePrice || 0);
+    let lineTotal = Number(totalInput.value || 0);
+    if (!lineTotal || row.dataset.manualTotal !== "true") {
+      lineTotal = quantity * unitPrice;
+      totalInput.value = lineTotal ? lineTotal.toFixed(2) : "";
+    } else if (source === totalInput && quantity > 0) {
+      unitPriceInput.value = (lineTotal / quantity).toFixed(2);
+    }
+
     total += lineTotal;
-    hint.textContent = `${product.name} | ${money(product.salePrice)} | Total ${money(lineTotal)}`;
+    hint.textContent = `${product.name} | Tabela ${money(product.salePrice)} | Total ${money(lineTotal)}`;
     hint.classList.add("ok");
   });
 
@@ -763,10 +801,13 @@ function wireForms() {
       const data = formJson(form);
       const rows = $$(".item-row", $("#itemRows"));
       data.sellerId = data.sellerId || null;
+      data.paymentCondition = data.paymentCondition || null;
       data.isFiscalInvoiceRequested = form.elements.isFiscalInvoiceRequested.checked;
       data.items = rows.map(row => ({
         productCode: $("input[name='productCode']", row).value,
-        quantity: Number($("input[name='quantity']", row).value)
+        quantity: Number($("input[name='quantity']", row).value),
+        unitPrice: Number($("input[name='unitPrice']", row).value || 0) || null,
+        totalAmount: Number($("input[name='totalAmount']", row).value || 0) || null
       }));
       return data;
     }, order => {
@@ -807,6 +848,16 @@ function financialFormJson(form) {
   const data = formJson(form);
   data.amount = Number(data.amount);
   return data;
+}
+
+function applyPaymentCondition() {
+  const form = $("#orderForm");
+  const condition = form.elements.paymentCondition.value;
+  const days = paymentTerms[condition];
+  if (days === undefined) return;
+  const dueDate = new Date();
+  dueDate.setDate(dueDate.getDate() + days);
+  form.elements.dueDate.value = dueDate.toISOString().slice(0, 10);
 }
 
 function wireNav() {
@@ -942,6 +993,7 @@ function editOrder(id) {
     customerId: order.customerId,
     sellerId: order.sellerId,
     dueDate: order.dueDate,
+    paymentCondition: order.paymentCondition,
     isFiscalInvoiceRequested: order.isFiscalInvoiceRequested,
     notes: order.notes
   });
@@ -952,6 +1004,10 @@ function editOrder(id) {
     const row = $$(".item-row").at(-1);
     $("input[name='productCode']", row).value = item.productCode;
     $("input[name='quantity']", row).value = item.quantity;
+    $("input[name='unitPrice']", row).value = Number(item.unitPrice || 0).toFixed(2);
+    $("input[name='totalAmount']", row).value = Number(item.totalAmount || 0).toFixed(2);
+    row.dataset.manualUnitPrice = "true";
+    row.dataset.manualTotal = "true";
   }
   refreshProductHints();
   updateFormMode(form);
@@ -1033,6 +1089,7 @@ function wireActions() {
   $("#addItem").addEventListener("click", addItemRow);
   $("#customerSearch").addEventListener("input", fillCustomerSelect);
   $("#orderForm select[name='customerId']").addEventListener("change", updateOrderCustomerHint);
+  $("#orderForm select[name='paymentCondition']").addEventListener("change", applyPaymentCondition);
   $("#loadForm select[name='regionId']").addEventListener("change", renderLoadOrderChoices);
   $("#closeVale").addEventListener("click", closeVale);
   $("#printVale").addEventListener("click", () => window.print());
@@ -1221,7 +1278,7 @@ function renderVale(vale) {
       </table>
       <div class="vale-footer">
         <div><strong>Informações</strong><br>Peso: ${Number(vale.totalWeightInKg || 0).toFixed(2)} Kg</div>
-        <div><strong>Vencimentos</strong><br>${dateBR(vale.dueDate)} - ${money(vale.totalAmount)}</div>
+        <div><strong>Vencimentos</strong><br>${escapeHtml(vale.paymentCondition ?? "-")} | ${dateBR(vale.dueDate)} - ${money(vale.totalAmount)}</div>
         <div><strong>Total</strong><br>${money(vale.totalAmount)}</div>
       </div>
     </section>
@@ -1280,12 +1337,24 @@ async function openReport(type, id = null, filters = {}) {
   }
 
   reportWindow.document.write("<p>Gerando relatorio...</p>");
-  await refreshAll();
+  await refreshReportData(type);
 
   const report = buildReport(type, id, filters);
   reportWindow.document.open();
   reportWindow.document.write(report);
   reportWindow.document.close();
+}
+
+async function refreshReportData(type) {
+  if (["orders", "salesPosition"].includes(type)) {
+    await refreshOrders();
+    return;
+  }
+
+  if (["loads", "load", "loading", "loadingLoad"].includes(type)) {
+    await refreshLoads();
+    return;
+  }
 }
 
 function buildReport(type, id, filters = {}) {
@@ -1295,6 +1364,7 @@ function buildReport(type, id, filters = {}) {
     load: () => reportSingleLoad(id),
     loading: () => reportLoadingAll(filters),
     loadingLoad: () => reportLoadingLoad(id),
+    salesPosition: () => reportSalesPosition(filters),
     customers: () => reportCustomers(filters),
     products: () => reportProducts(filters)
   };
@@ -1357,7 +1427,7 @@ function reportOrders(filters = {}) {
   });
   const total = rows.reduce((sum, order) => sum + Number(order.totalAmount || 0), 0);
   return {
-    title: "Relatório de pedidos e vales",
+    title: "Relatório de pedidos e executados",
     body: `
       <div class="summary">
         <div><strong>Pedidos</strong><br>${rows.length}</div>
@@ -1371,11 +1441,82 @@ function reportOrders(filters = {}) {
               <td>${order.number}</td>
               <td>${escapeHtml(order.customer?.legalName)}</td>
               <td>${escapeHtml(order.seller?.name ?? "-")}</td>
-              <td>${order.isFiscalInvoiceRequested ? "NF-e" : "Vale"}</td>
+              <td>${order.isFiscalInvoiceRequested ? "NF-e" : "Executado"}</td>
               <td>${escapeHtml(order.status)}</td>
               <td class="right">${money(order.totalAmount)}</td>
             </tr>
           `).join("") || `<tr><td colspan="6">Nenhum pedido encontrado com os filtros.</td></tr>`}
+        </tbody>
+      </table>
+    `
+  };
+}
+
+function reportSalesPosition(filters = {}) {
+  const selectedSeller = state.sellers.find(x => x.id === filters.sellerId);
+  const selectedProduct = state.products.find(x => x.code === filters.productCode || x.id === filters.productCode);
+  const rows = [];
+
+  for (const order of state.orders) {
+    if (order.status === "Cancelled") continue;
+    if (filters.sellerId && order.sellerId !== filters.sellerId) continue;
+    if (!withinDateRange(dateTimeToDateOnly(order.createdAt), filters.from, filters.to)) continue;
+
+    for (const item of order.items ?? []) {
+      if (filters.productCode && item.productCode !== filters.productCode && item.productId !== filters.productCode) continue;
+      rows.push({ order, item });
+    }
+  }
+
+  rows.sort((a, b) => {
+    const sellerCompare = String(a.order.seller?.name ?? "").localeCompare(String(b.order.seller?.name ?? ""), "pt-BR");
+    if (sellerCompare) return sellerCompare;
+    const productCompare = String(a.item.productName ?? "").localeCompare(String(b.item.productName ?? ""), "pt-BR");
+    if (productCompare) return productCompare;
+    return new Date(a.order.createdAt) - new Date(b.order.createdAt);
+  });
+
+  const totalQuantity = rows.reduce((sum, row) => sum + Number(row.item.quantity || 0), 0);
+  const totalAmount = rows.reduce((sum, row) => sum + Number(row.item.totalAmount || 0), 0);
+  const year = filters.from ? new Date(`${filters.from}T00:00:00`).getFullYear() : new Date().getFullYear();
+  const period = `${dateBR(filters.from) || "-"} a ${dateBR(filters.to) || "-"}`;
+
+  return {
+    title: `Posição de vendas por vendedor - ano ${year}`,
+    body: `
+      <div class="summary">
+        <div><strong>Vendedor</strong><br>${escapeHtml(selectedSeller ? `${selectedSeller.code} - ${selectedSeller.name}` : "Todos")}</div>
+        <div><strong>Produto</strong><br>${escapeHtml(selectedProduct ? `${selectedProduct.code} - ${selectedProduct.name}` : "Todos")}</div>
+        <div><strong>Período</strong><br>${period}</div>
+        <div><strong>Qtd.</strong><br>${quantityRaw(totalQuantity)}</div>
+        <div><strong>Total</strong><br>${money(totalAmount)}</div>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>Quant.</th>
+            <th>Cliente</th>
+            <th>Cond. Pgto</th>
+            <th class="right">Preço</th>
+            <th class="right">V. Total</th>
+            <th>Emissão</th>
+            <th>Data Ent.</th>
+            <th>Obs.</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rows.map(({ order, item }) => `
+            <tr>
+              <td class="right">${quantityRaw(item.quantity)}</td>
+              <td>${escapeHtml(order.customer?.legalName ?? "-")}</td>
+              <td>${escapeHtml(order.paymentCondition ?? "-")}</td>
+              <td class="right">${money(item.unitPrice)}</td>
+              <td class="right">${money(item.totalAmount)}</td>
+              <td>${dateBR(dateTimeToDateOnly(order.createdAt))}</td>
+              <td>${dateBR(order.dueDate)}</td>
+              <td>${escapeHtml(order.notes ?? "")}</td>
+            </tr>
+          `).join("") || `<tr><td colspan="8">Nenhuma venda encontrada com os filtros.</td></tr>`}
         </tbody>
       </table>
     `

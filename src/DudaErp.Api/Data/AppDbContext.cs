@@ -30,6 +30,8 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
         modelBuilder.Entity<AccountReceivable>().HasIndex(x => x.DueDate);
         modelBuilder.Entity<AccountPayable>().HasIndex(x => x.DueDate);
 
+        modelBuilder.Entity<Seller>().Property(x => x.Email).HasMaxLength(200);
+        modelBuilder.Entity<Seller>().Property(x => x.Phone).HasMaxLength(40);
         modelBuilder.Entity<Product>().Property(x => x.SalePrice).HasPrecision(18, 2);
         modelBuilder.Entity<Product>().Property(x => x.UnitSalePrice).HasPrecision(18, 2);
         modelBuilder.Entity<Product>().Property(x => x.WeightInKg).HasPrecision(18, 3);
@@ -37,6 +39,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
         modelBuilder.Entity<Product>().Property(x => x.IpiRate).HasPrecision(5, 2);
         modelBuilder.Entity<Order>().Property(x => x.TotalAmount).HasPrecision(18, 2);
         modelBuilder.Entity<Order>().Property(x => x.TotalWeightInKg).HasPrecision(18, 3);
+        modelBuilder.Entity<Order>().Property(x => x.PaymentCondition).HasMaxLength(40);
         modelBuilder.Entity<OrderItem>().Property(x => x.Quantity).HasPrecision(18, 3);
         modelBuilder.Entity<OrderItem>().Property(x => x.UnitPrice).HasPrecision(18, 2);
         modelBuilder.Entity<OrderItem>().Property(x => x.UnitWeightInKg).HasPrecision(18, 3);

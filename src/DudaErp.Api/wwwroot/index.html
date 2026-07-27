@@ -22,7 +22,7 @@
     <nav class="sidebar-nav">
       <button data-view="orders" class="nav-link active">
         <span class="nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 2h9l5 5v15H6z"></path><path d="M14 2v6h6"></path><path d="M9 13h6"></path><path d="M9 17h6"></path></svg></span>
-        <span class="nav-text">Pedidos e vales</span>
+        <span class="nav-text">Pedidos e executados</span>
       </button>
 
       <div class="nav-group open">
@@ -70,9 +70,10 @@
           <span class="nav-caret">›</span>
         </button>
         <div class="nav-submenu" data-menu="reports">
-          <button data-view="reportOrders" class="nav-link sub-link"><span class="nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 2h9l5 5v15H6z"></path><path d="M14 2v6h6"></path><path d="M9 13h6"></path><path d="M9 17h6"></path></svg></span><span class="nav-text">Pedidos e vales</span></button>
+          <button data-view="reportOrders" class="nav-link sub-link"><span class="nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 2h9l5 5v15H6z"></path><path d="M14 2v6h6"></path><path d="M9 13h6"></path><path d="M9 17h6"></path></svg></span><span class="nav-text">Pedidos e executados</span></button>
           <button data-view="reportLoads" class="nav-link sub-link"><span class="nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 17h4V5H2v12h3"></path><path d="M19 17h3v-6l-3-4h-5"></path><circle cx="7.5" cy="17.5" r="2.5"></circle><circle cx="17.5" cy="17.5" r="2.5"></circle></svg></span><span class="nav-text">Cargas e entregas</span></button>
           <button data-view="reportLoading" class="nav-link sub-link"><span class="nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16"></path><path d="M4 12h16"></path><path d="M4 17h10"></path><path d="M18 15l3 3-3 3"></path></svg></span><span class="nav-text">Carregamento</span></button>
+          <button data-view="reportSalesPosition" class="nav-link sub-link"><span class="nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3v18h18"></path><path d="M7 15l4-4 3 3 5-7"></path><path d="M14 7h5v5"></path></svg></span><span class="nav-text">Posição de vendas</span></button>
           <button data-view="reportCustomers" class="nav-link sub-link"><span class="nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"></circle><path d="M4 21a8 8 0 0 1 16 0"></path></svg></span><span class="nav-text">Clientes</span></button>
           <button data-view="reportProducts" class="nav-link sub-link"><span class="nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 8a2 2 0 0 0-1-1.73L13 2.27a2 2 0 0 0-2 0L4 6.27A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><path d="M3.3 7 12 12l8.7-5"></path><path d="M12 22V12"></path></svg></span><span class="nav-text">Produtos</span></button>
           
@@ -124,12 +125,24 @@
           <select name="customerId" required></select>
         </label>
         <label>Vendedor<select name="sellerId"></select></label>
+        <label>Condição de pagamento
+          <select name="paymentCondition">
+            <option value="">Selecione</option>
+            <option value="À vista">À vista</option>
+            <option value="7 dias">7 dias</option>
+            <option value="15 dias">15 dias</option>
+            <option value="28 ddl">28 ddl</option>
+            <option value="30/60 ddl">30/60 ddl</option>
+            <option value="30 ddl">30 ddl</option>
+            <option value="45 ddl">45 ddl</option>
+          </select>
+        </label>
         <label>Vencimento<input name="dueDate" type="date"></label>
-        <label class="check"><input name="isFiscalInvoiceRequested" type="checkbox"> Cliente quer NF-e</label>
+        <label class="check"><input name="isFiscalInvoiceRequested" type="checkbox"> Emitir NF-e</label>
         <label class="wide">Observacoes<input name="notes" placeholder="ex: boleto Bradesco, entregar de manha"></label>
 
         <div class="items wide">
-          <div class="row head"><span>Codigo</span><span>Qtd.</span><span>Produto encontrado</span><span></span></div>
+          <div class="row head"><span>Codigo</span><span>Qtd.</span><span>Preço</span><span>Total</span><span>Produto encontrado</span><span></span></div>
           <div id="itemRows"></div>
           <button type="button" id="addItem">Adicionar item</button>
         </div>
@@ -141,7 +154,7 @@
       <div class="panel list-panel">
         <div class="section-title wide">
           <h3>Ultimos pedidos</h3>
-          <span>Use o vale para mostrar o formato de impressao</span>
+          <span>Use o executado para mostrar o formato de impressão</span>
         </div>
         <div id="ordersList" class="list"></div>
       </div>
@@ -185,7 +198,7 @@
     <section id="reportOrders" class="view">
       <header>
         <div>
-          <h2>Relatório de pedidos e vales</h2>
+          <h2>Relatório de pedidos e executados</h2>
           <p>Filtre antes de gerar o PDF.</p>
         </div>
       </header>
@@ -205,13 +218,29 @@
         <label>Tipo
           <select name="invoiceType">
             <option value="">Todos</option>
-            <option value="vale">Vale interno</option>
+            <option value="vale">Executado</option>
             <option value="nfe">NF-e</option>
           </select>
         </label>
         <label>Vencimento inicial<input name="from" type="date"></label>
         <label>Vencimento final<input name="to" type="date"></label>
         <button class="primary" type="button" data-report="orders">Gerar PDF</button>
+      </form>
+    </section>
+
+    <section id="reportSalesPosition" class="view">
+      <header>
+        <div>
+          <h2>Posição de vendas por vendedor</h2>
+          <p>Mostra quanto foi vendido de um produto em um período, separado por vendedor.</p>
+        </div>
+      </header>
+      <form class="panel report-filter-panel" data-report-form="salesPosition">
+        <label>Vendedor<select name="sellerId" data-report-seller></select></label>
+        <label class="span-2">Produto<select name="productCode" data-report-product></select></label>
+        <label>Emissão inicial<input name="from" type="date"></label>
+        <label>Emissão final<input name="to" type="date"></label>
+        <button class="primary" type="button" data-report="salesPosition">Gerar PDF</button>
       </form>
     </section>
 
@@ -423,6 +452,8 @@
           <h3 class="wide">Novo vendedor</h3>
           <label>Codigo<input name="code" required></label>
           <label>Nome<input name="name" required></label>
+          <label>Email<input name="email" type="email"></label>
+          <label>Telefone<input name="phone"></label>
           <label>Comissão %<input name="defaultCommissionPercentage" type="number" step="0.01"></label>
           <button class="primary wide" type="submit">Cadastrar vendedor</button>
           <button class="wide" type="button" data-cancel-edit="seller">Cancelar edição</button>
