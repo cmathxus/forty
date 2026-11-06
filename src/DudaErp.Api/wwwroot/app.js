@@ -8,6 +8,8 @@ const state = {
   loads: [],
   payables: [],
   receivables: [],
+  inventory: { items: [], movements: [] },
+  productionPlans: [],
   editing: {}
 };
 let visibleOrders = 40;
@@ -18,11 +20,6 @@ let accessToken = sessionStorage.getItem("forty.accessToken") || "";
 const editModal = {
   form: null,
   placeholder: null
-};
-
-const DeliveryStatus = {
-  Delivered: 1,
-  Returned: 4
 };
 
 const PaymentMethod = {
@@ -114,7 +111,8 @@ function formJson(form) {
 function fillSelect(selector, rows, label, includeEmpty = false) {
   $$(selector).forEach(select => {
     const selected = select.value;
-    select.innerHTML = includeEmpty ? "<option value=\"\">Padrão</option>" : "";
+    const placeholders = { customerId: "Selecione um cliente", sellerId: "Selecione um vendedor", regionId: "Selecione uma região", vehicleId: "Selecione um veículo", productId: "Selecione um produto" };
+    select.innerHTML = `<option value="">${placeholders[select.name] || "Selecione uma opção"}</option>`;
     for (const row of rows) {
       const option = document.createElement("option");
       option.value = row.id;
@@ -190,6 +188,8 @@ async function refreshCatalog() {
   fillSelect("#customerForm select[name='sellerId']", sellers.filter(x => x.isActive), x => `${x.code} - ${x.name}`);
   fillSelect("select[name='vehicleId']", vehicles.filter(x => x.isActive), x => `${x.name} - ${x.plate}`, true);
   fillSelect("#receivableForm select[name='customerId']", customers.filter(x => x.isActive), x => x.legalName, true);
+  fillSelect("#stockForm select[name='productId']", products.filter(x => x.isActive), x => `${x.code} — ${x.name} (${x.unit})`, true);
+  $("#stockForm select[name='productId'] option[value='']").textContent = "Selecione um produto";
   fillCustomerSelect();
   $$('select').forEach(select => window.FortyControls?.syncSelect(select));
   refreshProductHints();
@@ -516,11 +516,11 @@ function renderLoads() {
       <div class="card-actions">
         ${load.status === "Open" ? `<button type="button" data-dispatch="${load.id}">Marcar saída pra rua</button>` : ""}
         <button type="button" data-report-load="${load.id}">Relatório da carga</button>
-        <button type="button" data-report-loading="${load.id}">Carregamento expedição</button>
+        <button type="button" data-report-loading="${load.id}">Carregamento expedição</button><button type="button" data-report-reconciliation="${load.id}">Conferência da carga</button>
         <button type="button" data-edit-load="${load.id}" ${load.status !== "Open" ? "disabled" : ""}>Editar</button>
         <button type="button" data-delete-load="${load.id}" ${load.status !== "Open" ? "disabled" : ""}>Excluir</button>
       </div>
-      <p class="delivery-help">Baixa da entrega: informe quanto recebeu em cada pedido e clique em Entregue ou Retornou.</p>
+      <p class="delivery-help">Confira, por produto, o que foi entregue, o que voltou ao depósito e o que faltou. Só a devolução física volta ao estoque.</p>
       <div class="order-lines">
         ${load.orders.map(item => renderLoadOrder(load, item)).join("")}
       </div>
@@ -531,47 +531,20 @@ function renderLoads() {
 
 function renderLoadOrder(load, item) {
   const order = item.order;
-  const pending = item.deliveryStatus === "Pending";
-  const received = item.amountReceived ?? order?.totalAmount ?? 0;
-  return `
-    <div class="load-order" data-load-order="${load.id}:${order.id}">
-      <div>
-        <strong>Pedido ${order?.number ?? "-"} - ${money(order?.totalAmount)}</strong>
-        <div class="meta">${escapeHtml(order?.customer?.legalName ?? "Cliente")} | ${statusBadge(item.deliveryStatus)}</div>
-        ${item.deliveryNotes ? `<div class="meta">Obs.: ${escapeHtml(item.deliveryNotes)}</div>` : ""}
-      </div>
-      ${pending && load.status === "Dispatched" ? `
-        <div class="delivery-close">
-          <label>Recebido
-            <input name="amountReceived" type="number" step="0.01" min="0" value="${Number(received).toFixed(2)}">
-          </label>
-          <label>Pagamento
-            <select name="paymentMethod">
-              <option value="${PaymentMethod.Pix}">Pix</option>
-              <option value="${PaymentMethod.Cash}">Dinheiro</option>
-              <option value="${PaymentMethod.Boleto}">Boleto</option>
-              <option value="${PaymentMethod.Check}">Cheque</option>
-              <option value="${PaymentMethod.Card}">Cartão</option>
-              <option value="${PaymentMethod.Transfer}">Transferência</option>
-              <option value="${PaymentMethod.Other}">Outro</option>
-            </select>
-          </label>
-          <label class="delivery-note">Observação
-            <input name="deliveryNotes" placeholder="ex: pago no Pix, voltou fechado">
-          </label>
-          <div class="card-actions">
-            <button type="button" class="primary" data-close-delivered="${load.id}:${order.id}">Entregue</button>
-            <button type="button" data-close-returned="${load.id}:${order.id}">Retornou</button>
-          </div>
-        </div>
-      ` : `
-        <div class="delivery-done">
-          <strong>Baixa feita</strong>
-          <div class="meta">Recebido ${money(item.amountReceived)} | ${item.paymentMethod}</div>
-        </div>
-      `}
+  const checked = item.itemResults?.length > 0;
+  return `<div class="load-order" data-load-order="${load.id}:${order.id}">
+    <div><strong>Pedido ${order.number} — ${money(order.totalAmount)}</strong>
+      <div class="meta">${escapeHtml(order.customer?.legalName ?? "Cliente")} | ${statusBadge(item.deliveryStatus)}</div>
+      ${item.deliveryNotes ? `<div class="meta">Obs.: ${escapeHtml(item.deliveryNotes)}</div>` : ""}
     </div>
-  `;
+    <div class="delivery-check-summary">
+      ${item.deliveryStatus === "Pending" ? load.status === "Dispatched"
+        ? `<button type="button" class="primary" data-reconcile="${load.id}:${order.id}">Conferir entrega e retorno</button>`
+        : '<span class="meta">Aguardando saída da carga.</span>'
+        : `<div class="meta">Recebido ${money(item.amountReceived)} · ${escapeHtml(item.paymentMethod)}</div>
+           ${checked ? '<span class="badge green">Produtos conferidos</span>' : '<span class="meta">Histórico sem conferência por produto.</span>'}
+           ${checked && item.itemResults.some(x => Number(x.missingQuantity) > 0) ? '<span class="badge red">Falta registrada — veja a conferência da carga</span>' : ''}`}
+    </div></div>`;
 }
 
 function renderLoadOrderChoices() {
@@ -719,7 +692,7 @@ function addItemRow() {
   row.className = "row item-row";
   row.innerHTML = `
     <input name="productCode" aria-label="Código do produto" placeholder="4300" required>
-    <input name="quantity" aria-label="Quantidade" type="number" step="0.001" min="0.001" value="1" required>
+    <input name="quantity" aria-label="Quantidade" type="number" step="0.001" min="0.001" placeholder="Qtd." required>
     <input name="unitPrice" aria-label="Preço por unidade de venda" type="number" step="0.01" min="0.01" placeholder="auto">
     <input name="totalAmount" aria-label="Total do item" type="number" step="0.01" min="0.01" placeholder="auto">
     <div class="product-hint">Digite o código</div>
@@ -844,7 +817,7 @@ function updateFormMode(form) {
 }
 
 function openCreateForm(key) {
-  const names = { customer: "Novo cliente", product: "Novo produto", seller: "Novo vendedor", region: "Nova região", vehicle: "Novo veículo", order: "Novo pedido", load: "Nova carga", payable: "Nova conta a pagar", receivable: "Nova conta a receber" };
+  const names = { customer: "Novo cliente", product: "Novo produto", seller: "Novo vendedor", region: "Nova região", vehicle: "Novo veículo", order: "Novo pedido", load: "Nova carga", payable: "Nova conta a pagar", receivable: "Nova conta a receber", stock: "Movimentar estoque", productionPlan: "Programar produção" };
   const form = $(`[data-edit-key='${key}']`);
   if (!form || !names[key]) return;
   const resumeDraft = form.dataset.dirty === "true" && !state.editing[key];
@@ -858,11 +831,12 @@ function openCreateForm(key) {
       $("#itemRows").innerHTML = "";
       addItemRow();
     }
-    if (key === "load") form.elements.scheduledDate.value = localDateOnly(new Date());
   }
   state.editing[key] = null;
+  if (key === "productionPlan" && !resumeDraft) prepareProductionPlan();
   if (key === "load") renderLoadOrderChoices();
   window.FortyControls?.sync(form);
+  if (key === "stock") { form.dataset.requestId = crypto.randomUUID(); updateStockHint(); }
   openEditModal(form, names[key]);
 }
 
@@ -881,7 +855,7 @@ function openEditModal(form, title) {
   $("#editModalTitle").textContent = title;
   $("#editModalBody").append(form);
   $("#editModal").classList.toggle("compact-modal", form.id === "regionForm");
-  $("#editModal").classList.toggle("medium-modal", ["sellerForm", "vehicleForm"].includes(form.id));
+  $("#editModal").classList.toggle("medium-modal", ["sellerForm", "vehicleForm", "stockForm"].includes(form.id));
   $("#editModal").classList.add("open");
   $("#editModal").setAttribute("aria-hidden", "false");
   updateFormMode(form);
@@ -1074,7 +1048,11 @@ function setupFormModes() {
     orderForm: "order",
     loadForm: "load",
     payableForm: "payable",
-    receivableForm: "receivable"
+    receivableForm: "receivable",
+    stockForm: "stock",
+    deliveryCheckForm: "delivery",
+    productionPlanForm: "productionPlan",
+    productionCompletionForm: "productionCompletion"
   };
 
   for (const [formId, key] of Object.entries(keys)) {
@@ -1345,6 +1323,13 @@ function wireActions() {
 
   document.addEventListener("click", async event => {
     const target = event.target.closest("button") || event.target;
+    if (target.dataset?.productionComplete) return openProductionCompletion(target.dataset.productionComplete);
+    if (target.dataset?.productionReport) return openReport("productionPlan", target.dataset.productionReport);
+    if (target.dataset?.productionCancel) return cancelProductionPlan(target.dataset.productionCancel);
+    if (target.hasAttribute?.('data-remove-production-item')) { target.closest('.production-item-row').remove(); $('#productionPlanForm').dataset.dirty = 'true'; return; }
+    if (target.dataset?.reconcile) return openDeliveryCheck(target.dataset.reconcile);
+    if (target.dataset?.checkPreset) return fillDeliveryPreset(target.dataset.checkPreset);
+    if (target.dataset?.reportReconciliation) return openReport("reconciliation", target.dataset.reportReconciliation);
     if (target.id === "editModal") {
       const key = editModal.form?.dataset?.editKey;
       if (key) resetEdit(key);
@@ -1390,32 +1375,19 @@ function wireActions() {
     const loadingReportId = event.target.dataset?.reportLoading;
     if (loadingReportId) return openReport("loadingLoad", loadingReportId);
 
-    const dispatchId = event.target.dataset?.dispatch;
+    const dispatchId = target.dataset?.dispatch;
     if (dispatchId) {
-      await api(`/api/delivery-loads/${dispatchId}/dispatch`, { method: "POST" });
-      toast("Carga marcada como saiu pra rua.");
-      await refreshAll();
+      target.disabled = true;
+      try {
+        await api(`/api/delivery-loads/${dispatchId}/dispatch`, { method: "POST" });
+        toast("Saída registrada e produtos debitados do estoque.");
+        await refreshAll();
+      } catch (error) { toast(error.message); }
+      finally { target.disabled = false; }
       return;
     }
 
-    const delivered = event.target.dataset?.closeDelivered;
-    if (delivered) {
-      const [loadId, orderId] = delivered.split(":");
-      const row = event.target.closest(".load-order");
-      const amount = Number($("input[name='amountReceived']", row)?.value || 0);
-      const payment = Number($("select[name='paymentMethod']", row)?.value || PaymentMethod.Pix);
-      const notes = $("input[name='deliveryNotes']", row)?.value || "Entregue e recebido.";
-      await closeDelivery(loadId, orderId, DeliveryStatus.Delivered, payment, amount, notes);
-      return;
-    }
 
-    const returned = event.target.dataset?.closeReturned;
-    if (returned) {
-      const [loadId, orderId] = returned.split(":");
-      const row = event.target.closest(".load-order");
-      const notes = $("input[name='deliveryNotes']", row)?.value || "Retornou da rua.";
-      await closeDelivery(loadId, orderId, DeliveryStatus.Returned, PaymentMethod.None, 0, notes);
-    }
   });
 
   document.addEventListener("keydown", event => {
@@ -1432,14 +1404,6 @@ function wireActions() {
   });
 }
 
-async function closeDelivery(loadId, orderId, deliveryStatus, paymentMethod, amountReceived, deliveryNotes) {
-  await api(`/api/delivery-loads/${loadId}/orders/${orderId}/close`, {
-    method: "POST",
-    body: JSON.stringify({ deliveryStatus, paymentMethod, amountReceived, deliveryNotes })
-  });
-  toast("Baixa registrada.");
-  await refreshAll();
-}
 
 async function openVale(orderId) {
   const vale = await api(`/api/orders/${orderId}/vale`);
@@ -1577,12 +1541,14 @@ async function openReport(type, id = null, filters = {}) {
 }
 
 async function refreshReportData(type) {
+  if (type === "inventory") return refreshInventory();
+  if (type === "productionPlan") return refreshProduction();
   if (["orders", "salesPosition"].includes(type)) {
     await refreshOrders();
     return;
   }
 
-  if (["loads", "load", "loading", "loadingLoad"].includes(type)) {
+  if (["loads", "load", "loading", "loadingLoad", "reconciliation"].includes(type)) {
     await refreshLoads();
     return;
   }
@@ -1590,6 +1556,9 @@ async function refreshReportData(type) {
 
 function buildReport(type, id, filters = {}) {
   const builders = {
+    inventory: () => reportInventory(),
+    productionPlan: () => reportProductionPlan(id),
+    reconciliation: () => reportReconciliation(id),
     orders: () => reportOrders(filters),
     loads: () => reportLoads(filters),
     load: () => reportSingleLoad(id),
@@ -2001,7 +1970,7 @@ async function refreshAll() {
   $("#syncStatus").textContent = "Atualizando dados…";
   refreshPromise = (async () => {
     try {
-      const results = await Promise.allSettled([refreshCatalog(), refreshOrders(), refreshLoads(), refreshFinancial()]);
+      const results = await Promise.allSettled([refreshCatalog(), refreshOrders(), refreshLoads(), refreshFinancial(), refreshInventory(), refreshProduction()]);
       const failure = results.find(result => result.status === "rejected");
       if (failure) throw failure.reason;
       $("#syncStatus").textContent = `Atualizado às ${new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}`;
@@ -2019,6 +1988,8 @@ async function refreshAll() {
 
 async function init() {
   wireAuthentication();
+  wireInventory();
+  wireProduction();
   setupFormModes();
   wireNav();
   wireForms();

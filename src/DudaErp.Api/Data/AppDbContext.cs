@@ -6,6 +6,10 @@ namespace DudaErp.Api.Data;
 public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(options)
 {
     public DbSet<AppUser> Users => Set<AppUser>();
+    public DbSet<StockMovement> StockMovements => Set<StockMovement>();
+    public DbSet<ProductionPlan> ProductionPlans => Set<ProductionPlan>();
+    public DbSet<ProductionPlanItem> ProductionPlanItems => Set<ProductionPlanItem>();
+    public DbSet<DeliveryItemResult> DeliveryItemResults => Set<DeliveryItemResult>();
     public DbSet<Region> Regions => Set<Region>();
     public DbSet<Seller> Sellers => Set<Seller>();
     public DbSet<Customer> Customers => Set<Customer>();
@@ -20,6 +24,25 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        modelBuilder.Entity<ProductionPlan>().HasIndex(x => x.Number).IsUnique();
+        modelBuilder.Entity<ProductionPlan>().HasIndex(x => x.RequestId).IsUnique();
+        modelBuilder.Entity<ProductionPlan>().Property(x => x.Notes).HasMaxLength(1000);
+        modelBuilder.Entity<ProductionPlanItem>().Property(x => x.PlannedQuantity).HasPrecision(18, 3);
+        modelBuilder.Entity<ProductionPlanItem>().Property(x => x.ProducedQuantity).HasPrecision(18, 3);
+        modelBuilder.Entity<ProductionPlanItem>().HasIndex(x => new { x.ProductionPlanId, x.ProductId }).IsUnique();
+        modelBuilder.Entity<ProductionPlanItem>().HasOne(x => x.Product).WithMany().HasForeignKey(x => x.ProductId).OnDelete(DeleteBehavior.Restrict);
+        modelBuilder.Entity<StockMovement>().Property(x => x.Quantity).HasPrecision(18, 3);
+        modelBuilder.Entity<StockMovement>().Property(x => x.SourceKey).HasMaxLength(120);
+        modelBuilder.Entity<StockMovement>().Property(x => x.Unit).HasMaxLength(10);
+        modelBuilder.Entity<StockMovement>().Property(x => x.Reason).HasMaxLength(500);
+        modelBuilder.Entity<StockMovement>().HasIndex(x => x.SourceKey).IsUnique();
+        modelBuilder.Entity<StockMovement>().HasIndex(x => new { x.ProductId, x.CreatedAt });
+        modelBuilder.Entity<StockMovement>().HasOne(x => x.Product).WithMany().HasForeignKey(x => x.ProductId).OnDelete(DeleteBehavior.Restrict);
+        modelBuilder.Entity<DeliveryItemResult>().Property(x => x.DeliveredQuantity).HasPrecision(18, 3);
+        modelBuilder.Entity<DeliveryItemResult>().Property(x => x.ReturnedQuantity).HasPrecision(18, 3);
+        modelBuilder.Entity<DeliveryItemResult>().Property(x => x.MissingQuantity).HasPrecision(18, 3);
+        modelBuilder.Entity<DeliveryItemResult>().HasIndex(x => new { x.DeliveryLoadOrderId, x.OrderItemId }).IsUnique();
+        modelBuilder.Entity<DeliveryItemResult>().HasOne(x => x.OrderItem).WithMany().HasForeignKey(x => x.OrderItemId).OnDelete(DeleteBehavior.Restrict);
         modelBuilder.Entity<AppUser>().HasIndex(x => x.Email).IsUnique();
         modelBuilder.Entity<AppUser>().Property(x => x.Email).HasMaxLength(254);
         modelBuilder.Entity<AppUser>().Property(x => x.Name).HasMaxLength(150);

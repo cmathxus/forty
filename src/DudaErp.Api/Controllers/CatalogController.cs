@@ -1,6 +1,7 @@
 using DudaErp.Api.Contracts;
 using DudaErp.Api.Data;
 using DudaErp.Api.Domain;
+using DudaErp.Api.Services;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -140,8 +141,11 @@ public sealed class CatalogController(AppDbContext dbContext) : ControllerBase
     [HttpPut("products/{id:guid}")]
     public async Task<ActionResult<Product>> UpdateProduct(Guid id, CreateProductRequest request, CancellationToken cancellationToken)
     {
+        await using var transaction = await new InventoryService(dbContext).BeginWriteAsync(cancellationToken);
         var product = await dbContext.Products.SingleOrDefaultAsync(x => x.Id == id, cancellationToken);
         if (product is null) return NotFound();
+        if (product.Unit != request.Unit.Trim().ToUpperInvariant() && await dbContext.StockMovements.AnyAsync(x => x.ProductId == id, cancellationToken))
+            return Conflict(new { detail = "A unidade não pode mudar depois de movimentar o estoque. Cadastre outro produto para uma nova embalagem." });
 
         product.Code = request.Code.Trim();
         product.Name = request.Name.Trim();
@@ -163,18 +167,24 @@ public sealed class CatalogController(AppDbContext dbContext) : ControllerBase
         product.IsActive = true;
         product.UpdatedAt = DateTimeOffset.UtcNow;
         await dbContext.SaveChangesAsync(cancellationToken);
+        if (transaction is not null) await transaction.CommitAsync(cancellationToken);
         return Ok(product);
     }
 
     [HttpDelete("products/{id:guid}")]
     public async Task<IActionResult> DeleteProduct(Guid id, CancellationToken cancellationToken)
     {
+        var inventory = new InventoryService(dbContext);
+        await using var transaction = await inventory.BeginWriteAsync(cancellationToken);
         var product = await dbContext.Products.SingleOrDefaultAsync(x => x.Id == id, cancellationToken);
         if (product is null) return NotFound();
+        if (await inventory.BalanceAsync(id, cancellationToken) != 0)
+            return Conflict(new { detail = "Não é possível excluir um produto com saldo de estoque. Confira e regularize o saldo primeiro." });
 
         product.IsActive = false;
         product.UpdatedAt = DateTimeOffset.UtcNow;
         await dbContext.SaveChangesAsync(cancellationToken);
+        if (transaction is not null) await transaction.CommitAsync(cancellationToken);
         return NoContent();
     }
 

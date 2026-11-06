@@ -25,7 +25,7 @@
 
   function enhanceSelect(field) {
     if (field.tomselect || field.closest('.flatpickr-calendar, .ts-wrapper') || !window.TomSelect) return;
-    const searchable = ['customerId', 'sellerId', 'productCode', 'regionId', 'vehicleId'].includes(field.name) || field.options.length > 8;
+    const searchable = ['customerId', 'sellerId', 'productId', 'productCode', 'regionId', 'vehicleId'].includes(field.name) || field.options.length > 8;
     const label = fieldLabel(field);
     const settings = {
       create: false,

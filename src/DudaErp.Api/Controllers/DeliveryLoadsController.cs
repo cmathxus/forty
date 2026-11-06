@@ -1,6 +1,7 @@
 using DudaErp.Api.Contracts;
 using DudaErp.Api.Data;
 using DudaErp.Api.Domain;
+using DudaErp.Api.Services;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -55,6 +56,7 @@ public sealed class DeliveryLoadsController(AppDbContext dbContext) : Controller
             .Include(x => x.Vehicle)
             .Include(x => x.Orders).ThenInclude(x => x.Order).ThenInclude(x => x!.Customer)
             .Include(x => x.Orders).ThenInclude(x => x.Order).ThenInclude(x => x!.Items)
+            .Include(x => x.Orders).ThenInclude(x => x.ItemResults)
             .AsSplitQuery()
             .AsQueryable();
 
@@ -178,8 +180,11 @@ public sealed class DeliveryLoadsController(AppDbContext dbContext) : Controller
     [HttpPost("{loadId:guid}/orders/{orderId:guid}/close")]
     public async Task<ActionResult<DeliveryLoad>> CloseOrder(Guid loadId, Guid orderId, CloseDeliveryRequest request, CancellationToken cancellationToken)
     {
+        var inventory = new InventoryService(dbContext);
+        await using var transaction = await inventory.BeginWriteAsync(cancellationToken);
         var loadOrder = await dbContext.DeliveryLoadOrders
-            .Include(x => x.Order)
+            .Include(x => x.Order).ThenInclude(x => x!.Items)
+            .Include(x => x.ItemResults)
             .SingleOrDefaultAsync(x => x.DeliveryLoadId == loadId && x.OrderId == orderId, cancellationToken);
 
         if (loadOrder is null)
@@ -197,6 +202,30 @@ public sealed class DeliveryLoadsController(AppDbContext dbContext) : Controller
             (request.DeliveryStatus is DeliveryStatus.Returned or DeliveryStatus.Refused && request.AmountReceived > 0) ||
             (request.AmountReceived > 0 && request.PaymentMethod == PaymentMethod.None))
             return BadRequest(new { detail = "Revise o valor recebido e a forma de pagamento." });
+
+        if (deliveryLoad.InventoryTracked && request.Items is null)
+            return BadRequest(new { detail = "Confira as quantidades entregues e devolvidas de cada produto." });
+        if (request.Items is not null)
+        {
+            var results = InventoryService.Reconcile(loadOrder, request.Items);
+            var allDelivered = results.All(x => x.DeliveredQuantity == loadOrder.Order!.Items.Single(i => i.Id == x.OrderItemId).Quantity);
+            var anyDelivered = results.Any(x => x.DeliveredQuantity > 0);
+            if ((request.DeliveryStatus == DeliveryStatus.Delivered && !allDelivered) ||
+                (request.DeliveryStatus == DeliveryStatus.PartiallyDelivered && (!anyDelivered || allDelivered)) ||
+                (request.DeliveryStatus is DeliveryStatus.Returned or DeliveryStatus.Refused && anyDelivered))
+                return BadRequest(new { detail = "A situação da entrega não corresponde às quantidades conferidas." });
+            if (results.Any(x => x.MissingQuantity > 0) && string.IsNullOrWhiteSpace(request.DeliveryNotes))
+                return BadRequest(new { detail = "Descreva a divergência antes de registrar produtos faltantes." });
+            var deliveredAmount = decimal.Round(results.Sum(x => {
+                var original = loadOrder.Order!.Items.Single(i => i.Id == x.OrderItemId);
+                return original.TotalAmount * x.DeliveredQuantity / original.Quantity;
+            }), 2, MidpointRounding.AwayFromZero);
+            if (request.AmountReceived > deliveredAmount)
+                return BadRequest(new { detail = "O valor recebido não pode superar o valor dos itens entregues." });
+            loadOrder.ItemResults = results;
+            dbContext.DeliveryItemResults.AddRange(results);
+            inventory.RecordReturns(deliveryLoad, loadOrder, User?.Identity?.Name ?? "Sistema");
+        }
 
         loadOrder.DeliveryStatus = request.DeliveryStatus;
         loadOrder.PaymentMethod = request.PaymentMethod;
@@ -224,14 +253,17 @@ public sealed class DeliveryLoadsController(AppDbContext dbContext) : Controller
         }
 
         await dbContext.SaveChangesAsync(cancellationToken);
+        if (transaction is not null) await transaction.CommitAsync(cancellationToken);
         return Ok(await LoadById(loadId, cancellationToken));
     }
 
     [HttpPost("{id:guid}/dispatch")]
     public async Task<IActionResult> Dispatch(Guid id, CancellationToken cancellationToken)
     {
+        var inventory = new InventoryService(dbContext);
+        await using var transaction = await inventory.BeginWriteAsync(cancellationToken);
         var load = await dbContext.DeliveryLoads
-            .Include(x => x.Orders).ThenInclude(x => x.Order)
+            .Include(x => x.Orders).ThenInclude(x => x.Order).ThenInclude(x => x!.Items)
             .SingleOrDefaultAsync(x => x.Id == id, cancellationToken);
         if (load is null)
         {
@@ -242,6 +274,7 @@ public sealed class DeliveryLoadsController(AppDbContext dbContext) : Controller
             load.Orders.Any(x => x.DeliveryStatus != DeliveryStatus.Pending))
             return Conflict(new { detail = "Somente uma carga aberta, com pedidos pendentes, pode sair para entrega." });
 
+        await inventory.RecordDispatchAsync(load, User?.Identity?.Name ?? "Sistema", cancellationToken);
         load.Status = LoadStatus.Dispatched;
         foreach (var item in load.Orders)
         {
@@ -249,6 +282,7 @@ public sealed class DeliveryLoadsController(AppDbContext dbContext) : Controller
         }
 
         await dbContext.SaveChangesAsync(cancellationToken);
+        if (transaction is not null) await transaction.CommitAsync(cancellationToken);
         return NoContent();
     }
 
@@ -324,6 +358,8 @@ public sealed class DeliveryLoadsController(AppDbContext dbContext) : Controller
             .Include(x => x.Orders).ThenInclude(x => x.Order).ThenInclude(x => x!.Customer)
             .Include(x => x.Orders).ThenInclude(x => x.Order).ThenInclude(x => x!.Seller)
             .Include(x => x.Orders).ThenInclude(x => x.Order).ThenInclude(x => x!.Items)
+            .Include(x => x.Orders).ThenInclude(x => x.ItemResults)
+            .AsSplitQuery()
             .SingleOrDefaultAsync(x => x.Id == id, cancellationToken);
 
     private async Task<long> NextNumberAsync(CancellationToken cancellationToken)

@@ -5,6 +5,42 @@ import assert from 'node:assert/strict';
 
 const source = readFileSync(new URL('../src/DudaErp.Api/wwwroot/app.js', import.meta.url), 'utf8')
   .replace(/\ninit\(\)\.catch[\s\S]*$/, '');
+const inventorySource = readFileSync(new URL('../src/DudaErp.Api/wwwroot/inventory.js', import.meta.url), 'utf8');
+const productionSource = readFileSync(new URL('../src/DudaErp.Api/wwwroot/production.js', import.meta.url), 'utf8');
+
+test('lista de produção imprime planejado e espaço para conferência sem presumir fabricação', () => {
+  const ui = setup();
+  vm.runInContext(inventorySource, ui.context);
+  vm.runInContext(productionSource, ui.context);
+  ui.run(`state.productionPlans = [{id:'p',number:1,scheduledDate:'2026-11-07',status:'Planned',createdBy:'Operador',notes:'<script>teste</script>',items:[{productCode:'A',productName:'Flokmel',unit:'FD',plannedQuantity:100}]}]`);
+  const report = ui.run(`reportProductionPlan('p')`);
+  assert(report.body.includes('100'));
+  assert(report.body.includes('Flokmel'));
+  assert(report.body.includes('________________'));
+  assert(report.body.includes('não movimenta estoque'));
+  assert(!report.body.includes('<script>teste</script>'));
+  ui.run(`state.productionPlans[0].status='Completed';state.productionPlans[0].items[0].producedQuantity=90;state.productionPlans[0].productionDate='2026-11-07'`);
+  assert(ui.run(`reportProductionPlan('p').body`).includes('90'));
+});
+
+test('conferência diferencia devolução física, entrega parcial e falta', () => {
+  const context = vm.createContext({});
+  vm.runInContext(inventorySource, context);
+  const summary = vm.runInContext(`deliveryCheckSummary([{id:'a',quantity:10,totalAmount:100}],
+    [{orderItemId:'a',deliveredQuantity:'6',returnedQuantity:'3'}])`, context);
+  assert.equal(summary.items[0].missingQuantity, 1);
+  assert.equal(summary.status, 2);
+  assert.equal(summary.deliveredAmount, 60);
+  assert.equal(summary.complete, true);
+});
+
+test('conferência não trata campos vazios como confirmação e rejeita excesso', () => {
+  const context = vm.createContext({});
+  vm.runInContext(inventorySource, context);
+  for (const input of [`{orderItemId:'a',deliveredQuantity:'',returnedQuantity:''}`, `{orderItemId:'a',deliveredQuantity:'9',returnedQuantity:'2'}`]) {
+    assert.equal(vm.runInContext(`deliveryCheckSummary([{id:'a',quantity:10,totalAmount:100}], [${input}]).complete`, context), false);
+  }
+});
 
 function setup() {
   const fields = Object.fromEntries(['productCode', 'quantity', 'unitPrice', 'totalAmount'].map(name => [name, { name, value: '' }]));
@@ -33,6 +69,22 @@ test('busca por nome não retorna clientes sem correspondência', () => {
   ui.search.value = 'Azul';
   assert.equal(ui.run('filteredCustomersForOrder().length'), 1);
   assert.equal(ui.run('filteredCustomersForOrder()[0].taxId'), '123');
+});
+
+test('listas de cadastro começam sem seleção e preservam escolha explícita ao atualizar', () => {
+  const ui = setup();
+  const select = { name: 'customerId', options: [], value: '', append(option) { this.options.push(option); },
+    set innerHTML(_) { this.options = [{ value: '', textContent: '' }]; this.value = ''; } };
+  ui.context.document.querySelectorAll = () => [select];
+  ui.context.document.createElement = () => ({ value: '', textContent: '' });
+  ui.run(`fillSelect('select', [{id:'cliente-a',name:'Cliente A'}], row => row.name)`);
+  assert.equal(select.value, '');
+  assert.equal(select.options[0].value, '');
+  select.value = 'cliente-a';
+  ui.run(`fillSelect('select', [{id:'cliente-a',name:'Cliente A'}], row => row.name)`);
+  assert.equal(select.value, 'cliente-a');
+  ui.run(`fillSelect('select', [], row => row.name)`);
+  assert.equal(select.value, '');
 });
 
 test('trocar produto elimina o preço negociado do produto anterior', () => {

@@ -89,7 +89,24 @@ public sealed record CloseDeliveryRequest(
     DudaErp.Api.Domain.DeliveryStatus DeliveryStatus,
     DudaErp.Api.Domain.PaymentMethod PaymentMethod,
     [Range(0, double.MaxValue)] decimal? AmountReceived,
-    string? DeliveryNotes);
+    string? DeliveryNotes,
+    IReadOnlyCollection<DeliveryItemResultRequest>? Items = null);
+
+public sealed record DeliveryItemResultRequest(Guid OrderItemId,
+    [Range(0, double.MaxValue)] decimal DeliveredQuantity,
+    [Range(0, double.MaxValue)] decimal ReturnedQuantity);
+
+public sealed record RecordStockRequest(Guid RequestId, Guid ProductId,
+    DudaErp.Api.Domain.StockMovementKind Kind,
+    [Range(0, double.MaxValue)] decimal Quantity,
+    [Required, MinLength(3), MaxLength(500)] string Reason,
+    DateOnly? ProductionDate = null);
+
+public sealed record ProductionPlanItemRequest(Guid ProductId, decimal Quantity);
+public sealed record CreateProductionPlanRequest(Guid RequestId, DateOnly? ScheduledDate,
+    [MaxLength(1000)] string? Notes, IReadOnlyCollection<ProductionPlanItemRequest> Items);
+public sealed record CompleteProductionPlanRequest(DateOnly? ProductionDate,
+    IReadOnlyCollection<ProductionPlanItemRequest> Items);
 
 public sealed record CreateAccountPayableRequest(
     [Required] string Description,

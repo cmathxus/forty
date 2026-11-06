@@ -2,6 +2,7 @@
 **/obj/
 .git/
 .github/
+artifacts/
 .vs/
 .vscode/
 *.user

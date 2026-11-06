@@ -3,6 +3,7 @@ using System.Globalization;
 using System.Text;
 using DudaErp.Api.Data;
 using DudaErp.Api.Domain;
+using DudaErp.Api.Services;
 using ExcelDataReader;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -98,9 +99,9 @@ public sealed class ImportController(AppDbContext dbContext) : ControllerBase
         if (general is not null)
             foreach (DataRow row in general.Rows)
                 packaging.TryAdd(Cell(row, "codigo", "codigodoproduto"), Cell(row, "unidades", "embalagem"));
+        await using var transaction = await new InventoryService(dbContext).BeginWriteAsync(cancellationToken);
         var existing = (await dbContext.Products.ToListAsync(cancellationToken)).ToDictionary(x => x.Code, StringComparer.OrdinalIgnoreCase);
-        await using var transaction = dbContext.Database.IsRelational() && dbContext.Database.CurrentTransaction is null
-            ? await dbContext.Database.BeginTransactionAsync(cancellationToken) : null;
+        var stockedProducts = (await dbContext.StockMovements.Select(x => x.ProductId).Distinct().ToListAsync(cancellationToken)).ToHashSet();
         var created = 0;
         var updated = 0;
         var skipped = 0;
@@ -130,7 +131,16 @@ public sealed class ImportController(AppDbContext dbContext) : ControllerBase
                 dbContext.Products.Add(product);
                 created++;
             }
-            else { updated++; product.UpdatedAt = DateTimeOffset.UtcNow; }
+            else
+            {
+                if (product.Unit != "FD" && stockedProducts.Contains(product.Id))
+                {
+                    skipped++;
+                    warnings.Add(new(rowNumber, "Produto ignorado: a importação por fardo não pode alterar uma unidade com histórico de estoque."));
+                    continue;
+                }
+                updated++; product.UpdatedAt = DateTimeOffset.UtcNow;
+            }
             product.Name = name;
             // O pedido usa preço por caixa/fardo; UN na aba Omie representa a unidade interna.
             product.Unit = "FD";

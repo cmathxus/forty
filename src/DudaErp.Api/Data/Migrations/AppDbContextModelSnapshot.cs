@@ -235,6 +235,46 @@ namespace DudaErp.Api.Data.Migrations
                     b.ToTable("Customers");
                 });
 
+            modelBuilder.Entity("DudaErp.Api.Domain.DeliveryItemResult", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<decimal>("DeliveredQuantity")
+                        .HasPrecision(18, 3)
+                        .HasColumnType("numeric(18,3)");
+
+                    b.Property<Guid>("DeliveryLoadOrderId")
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal>("MissingQuantity")
+                        .HasPrecision(18, 3)
+                        .HasColumnType("numeric(18,3)");
+
+                    b.Property<Guid>("OrderItemId")
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal>("ReturnedQuantity")
+                        .HasPrecision(18, 3)
+                        .HasColumnType("numeric(18,3)");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OrderItemId");
+
+                    b.HasIndex("DeliveryLoadOrderId", "OrderItemId")
+                        .IsUnique();
+
+                    b.ToTable("DeliveryItemResults");
+                });
+
             modelBuilder.Entity("DudaErp.Api.Domain.DeliveryLoad", b =>
                 {
                     b.Property<Guid>("Id")
@@ -246,6 +286,9 @@ namespace DudaErp.Api.Data.Migrations
 
                     b.Property<string>("DriverName")
                         .HasColumnType("text");
+
+                    b.Property<bool>("InventoryTracked")
+                        .HasColumnType("boolean");
 
                     b.Property<string>("Notes")
                         .HasColumnType("text");
@@ -518,6 +561,106 @@ namespace DudaErp.Api.Data.Migrations
                     b.ToTable("Products");
                 });
 
+            modelBuilder.Entity("DudaErp.Api.Domain.ProductionPlan", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset?>("CompletedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CompletedBy")
+                        .HasColumnType("text");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CreatedBy")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<long>("Number")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateOnly?>("ProductionDate")
+                        .HasColumnType("date");
+
+                    b.Property<Guid>("RequestId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateOnly>("ScheduledDate")
+                        .HasColumnType("date");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Number")
+                        .IsUnique();
+
+                    b.HasIndex("RequestId")
+                        .IsUnique();
+
+                    b.ToTable("ProductionPlans");
+                });
+
+            modelBuilder.Entity("DudaErp.Api.Domain.ProductionPlanItem", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<decimal>("PlannedQuantity")
+                        .HasPrecision(18, 3)
+                        .HasColumnType("numeric(18,3)");
+
+                    b.Property<decimal?>("ProducedQuantity")
+                        .HasPrecision(18, 3)
+                        .HasColumnType("numeric(18,3)");
+
+                    b.Property<string>("ProductCode")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("ProductId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ProductName")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("ProductionPlanId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Unit")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProductId");
+
+                    b.HasIndex("ProductionPlanId", "ProductId")
+                        .IsUnique();
+
+                    b.ToTable("ProductionPlanItems");
+                });
+
             modelBuilder.Entity("DudaErp.Api.Domain.Region", b =>
                 {
                     b.Property<Guid>("Id")
@@ -587,6 +730,63 @@ namespace DudaErp.Api.Data.Migrations
                     b.ToTable("Sellers");
                 });
 
+            modelBuilder.Entity("DudaErp.Api.Domain.StockMovement", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("DeliveryLoadId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Kind")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("ProductId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateOnly?>("ProductionDate")
+                        .HasColumnType("date");
+
+                    b.Property<decimal>("Quantity")
+                        .HasPrecision(18, 3)
+                        .HasColumnType("numeric(18,3)");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<string>("RecordedBy")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("SourceKey")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)");
+
+                    b.Property<string>("Unit")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SourceKey")
+                        .IsUnique();
+
+                    b.HasIndex("ProductId", "CreatedAt");
+
+                    b.ToTable("StockMovements");
+                });
+
             modelBuilder.Entity("DudaErp.Api.Domain.Vehicle", b =>
                 {
                     b.Property<Guid>("Id")
@@ -648,6 +848,25 @@ namespace DudaErp.Api.Data.Migrations
                     b.Navigation("Region");
 
                     b.Navigation("Seller");
+                });
+
+            modelBuilder.Entity("DudaErp.Api.Domain.DeliveryItemResult", b =>
+                {
+                    b.HasOne("DudaErp.Api.Domain.DeliveryLoadOrder", "DeliveryLoadOrder")
+                        .WithMany("ItemResults")
+                        .HasForeignKey("DeliveryLoadOrderId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("DudaErp.Api.Domain.OrderItem", "OrderItem")
+                        .WithMany()
+                        .HasForeignKey("OrderItemId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("DeliveryLoadOrder");
+
+                    b.Navigation("OrderItem");
                 });
 
             modelBuilder.Entity("DudaErp.Api.Domain.DeliveryLoad", b =>
@@ -725,12 +944,52 @@ namespace DudaErp.Api.Data.Migrations
                     b.Navigation("Product");
                 });
 
+            modelBuilder.Entity("DudaErp.Api.Domain.ProductionPlanItem", b =>
+                {
+                    b.HasOne("DudaErp.Api.Domain.Product", "Product")
+                        .WithMany()
+                        .HasForeignKey("ProductId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("DudaErp.Api.Domain.ProductionPlan", "ProductionPlan")
+                        .WithMany("Items")
+                        .HasForeignKey("ProductionPlanId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Product");
+
+                    b.Navigation("ProductionPlan");
+                });
+
+            modelBuilder.Entity("DudaErp.Api.Domain.StockMovement", b =>
+                {
+                    b.HasOne("DudaErp.Api.Domain.Product", "Product")
+                        .WithMany()
+                        .HasForeignKey("ProductId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Product");
+                });
+
             modelBuilder.Entity("DudaErp.Api.Domain.DeliveryLoad", b =>
                 {
                     b.Navigation("Orders");
                 });
 
+            modelBuilder.Entity("DudaErp.Api.Domain.DeliveryLoadOrder", b =>
+                {
+                    b.Navigation("ItemResults");
+                });
+
             modelBuilder.Entity("DudaErp.Api.Domain.Order", b =>
+                {
+                    b.Navigation("Items");
+                });
+
+            modelBuilder.Entity("DudaErp.Api.Domain.ProductionPlan", b =>
                 {
                     b.Navigation("Items");
                 });

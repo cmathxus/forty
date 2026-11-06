@@ -13,7 +13,7 @@ public sealed class PostgresFactAttribute : FactAttribute
     public PostgresFactAttribute()
     {
         if (string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("FORTY_TEST_CONNECTION")))
-            Skip = "Defina FORTY_TEST_CONNECTION para um PostgreSQL de teste migrado.";
+            Skip = "Defina FORTY_TEST_CONNECTION para testar em um schema temporário isolado.";
     }
 }
 
@@ -22,9 +22,8 @@ public sealed class PostgresWorkflowTests
     [PostgresFact]
     public async Task OrdersAndLoads_PreserveHistoryAndReplaceItemsAtomically()
     {
-        var options = new DbContextOptionsBuilder<AppDbContext>()
-            .UseNpgsql(Environment.GetEnvironmentVariable("FORTY_TEST_CONNECTION")).Options;
-        await using var db = new AppDbContext(options);
+        await using var database = await PostgresTestDatabase.CreateAsync();
+        var db = database.Db;
         // Todas as escritas deste teste são revertidas, inclusive em caso de falha.
         await using var transaction = await db.Database.BeginTransactionAsync();
         var suffix = Guid.NewGuid().ToString("N");
@@ -62,11 +61,15 @@ public sealed class PostgresWorkflowTests
         var updated = await loads.Update(load.Id, new UpdateDeliveryLoadRequest(load.ScheduledDate, region.Id, null, "QA editado", null, [order.Id]), default);
         Assert.IsType<OkObjectResult>(updated.Result);
         Assert.Equal(linkId, (await db.DeliveryLoadOrders.SingleAsync(x => x.OrderId == order.Id)).Id);
+        db.StockMovements.Add(new StockMovement { ProductId = product.Id, Kind = StockMovementKind.Count, Quantity = 10,
+            Unit = "FD", SourceKey = "qa-initial", RecordedBy = "QA", Reason = "Contagem inicial" });
+        await db.SaveChangesAsync();
         Assert.IsType<NoContentResult>(await loads.Dispatch(load.Id, default));
         Assert.IsType<ConflictObjectResult>(await loads.Delete(load.Id, default));
         Assert.IsType<ConflictObjectResult>(await loads.Dispatch(load.Id, default));
         var closed = await loads.CloseOrder(load.Id, order.Id,
-            new CloseDeliveryRequest(DeliveryStatus.Delivered, PaymentMethod.Pix, 30m, "QA"), default);
+            new CloseDeliveryRequest(DeliveryStatus.Delivered, PaymentMethod.Pix, 30m, "QA",
+                [new DeliveryItemResultRequest(originalItemId, 3, 0)]), default);
         Assert.IsType<OkObjectResult>(closed.Result);
         Assert.Equal(LoadStatus.Closed, load.Status);
         var persistedLink = await db.DeliveryLoadOrders.SingleAsync(x => x.OrderId == order.Id);

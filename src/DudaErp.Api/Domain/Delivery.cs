@@ -47,6 +47,7 @@ public sealed class DeliveryLoad : Entity
     public Vehicle? Vehicle { get; set; }
     public string? DriverName { get; set; }
     public LoadStatus Status { get; set; } = LoadStatus.Open;
+    public bool InventoryTracked { get; set; }
     public string? Notes { get; set; }
     public List<DeliveryLoadOrder> Orders { get; set; } = [];
 }
@@ -62,4 +63,5 @@ public sealed class DeliveryLoadOrder : Entity
     public decimal? AmountReceived { get; set; }
     public DateTimeOffset? DeliveredAt { get; set; }
     public string? DeliveryNotes { get; set; }
+    public List<DeliveryItemResult> ItemResults { get; set; } = [];
 }

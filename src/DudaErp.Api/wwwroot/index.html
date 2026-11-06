@@ -17,7 +17,7 @@
     <div class="login-art" aria-hidden="true"><span class="login-wordmark">FORTY<span>.</span></span><div class="shipping-art"><svg viewBox="0 0 460 340"><path d="m80 100 130-68 130 68-130 69zM80 100v140l130 70 130-70V100M210 169v141M145 65l130 70v48M80 239l75-41M340 240l-75-42"></path><path class="art-route" d="M22 280h45M370 78h68M365 270h60M55 35h30"></path><path class="art-arrow" d="M280 280h140m-25-25 25 25-25 25"></path></svg></div><p>Do pedido à entrega.</p><span class="login-art-caption">Pedidos, cargas e financeiro.</span></div><form id="loginForm" class="login-card">
       <span class="login-context">Acesso ao FORTY</span><h2 id="loginTitle">Acesse sua<br>operação.</h2><p class="login-description">Entre na sua conta para acessar a operação.</p>
       <label>E-mail<input name="email" type="email" autocomplete="username" required placeholder="voce@empresa.com.br"></label>
-      <label>Senha<input name="password" type="password" autocomplete="current-password" required></label>
+      <label>Senha<input name="password" type="password" autocomplete="current-password" required placeholder="Informe senha"></label>
       <p id="loginError" class="form-error" role="alert"></p>
       <button class="primary" type="submit">Entrar</button>
       <span class="login-help">Precisa de acesso? Fale com o administrador.</span>
@@ -43,8 +43,8 @@
           <span class="nav-text">Operação</span>
           <span class="nav-caret">›</span>
         </button>
-        <div class="nav-submenu" data-menu="operation">
-          <button data-view="orders" class="nav-link sub-link"><span class="nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 2h9l5 5v15H6z"></path><path d="M14 2v6h6"></path><path d="M9 13h6"></path><path d="M9 17h6"></path></svg></span><span class="nav-text">Pedidos e executados</span></button>
+        <div class="nav-submenu" data-menu="operation"><button data-view="inventory" class="nav-link sub-link"><span class="nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m3 7 9-4 9 4-9 4zM3 7v10l9 4 9-4V7M12 11v10"></path></svg></span><span class="nav-text">Estoque</span></button>
+          <button data-view="production" class="nav-link sub-link"><span class="nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 21V9l6 3V7l6 3V3h4v18zM7 16h1m4 0h1m4 0h1"></path></svg></span><span class="nav-text">Produção</span></button><button data-view="orders" class="nav-link sub-link"><span class="nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 2h9l5 5v15H6z"></path><path d="M14 2v6h6"></path><path d="M9 13h6"></path><path d="M9 17h6"></path></svg></span><span class="nav-text">Pedidos e executados</span></button>
           <button data-view="loads" class="nav-link sub-link"><span class="nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7h11v10H3z"></path><path d="M14 11h4l3 3v3h-7z"></path><circle cx="7" cy="18" r="2"></circle><circle cx="18" cy="18" r="2"></circle></svg></span><span class="nav-text">Cargas e entregas</span></button>
         </div>
       </div>
@@ -235,7 +235,7 @@
 <fieldset class="form-section"><legend>Transporte</legend><div class="form-section-fields"><label>Veículo<select name="vehicleId"></select></label>
 <label>Motorista<input name="driverName" placeholder="nome do entregador"></label></div></fieldset>
 
-<fieldset class="form-section"><legend>Informações adicionais</legend><div class="form-section-fields"><label class="wide">Observações<input name="notes"></label></div></fieldset>
+<fieldset class="form-section"><legend>Informações adicionais</legend><div class="form-section-fields"><label class="wide">Observações<input name="notes" placeholder="Informe observações"></label></div></fieldset>
 <div class="wide">
           <h3>Pedidos disponíveis</h3>
           <div id="loadOrderChoices" class="choices"></div>
@@ -508,49 +508,68 @@
 
       </div>
     </section>
+<section id="inventory" class="view registry-page">
+<header><div><h2>Estoque e produção</h2><p>Produção, entradas, saídas e devoluções, com saldo total por produto.</p></div><button class="primary registry-new" type="button" data-create="stock"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>Movimentar estoque</button></header>
+<div class="inventory-notice"><strong>Comece pela contagem física</strong><p>Registre o saldo real de cada produto antes de despachar cargas. As quantidades usam a unidade de venda (caixa, fardo etc.). Uma saída reduz o saldo; só os produtos devolvidos ao depósito voltam ao estoque.</p></div>
+<div class="panel list-panel"><div class="section-title wide"><div><h3>Saldo por produto</h3><span id="stockCount"></span></div><button type="button" data-report="inventory">Imprimir posição</button></div><input id="stockSearch" class="filter-input" type="search" aria-label="Buscar produto no estoque" placeholder="Buscar por código ou produto"><div class="stock-table-wrap"><table class="dashboard-table"><thead><tr><th>Código</th><th>Produto</th><th>Unidade</th><th>Saldo</th><th>Situação</th></tr></thead><tbody id="stockBalances"></tbody></table></div></div>
+<div class="panel list-panel"><div class="section-title wide"><h3>Movimentações recentes</h3><span>Últimos 100 lançamentos · histórico sem exclusão</span></div><div class="stock-table-wrap"><table class="dashboard-table"><thead><tr><th>Data</th><th>Produto</th><th>Movimento</th><th>Quantidade</th><th>Motivo / origem</th><th>Registrado por</th></tr></thead><tbody id="stockHistory"></tbody></table></div></div>
+</section>
+<section id="production" class="view registry-page"><header><div><h2>Produção</h2><p>Monte a lista do que fabricar e passe para a equipe.</p></div><button type="button" class="primary registry-new" data-create="productionPlan"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>Programar produção</button></header><div class="inventory-notice"><strong>Planeje, imprima e confira</strong><p>A lista informa os produtos e as quantidades a produzir. Depois da fabricação, confirme as quantidades reais para somar ao estoque. Não registre a mesma produção também como movimento avulso.</p></div><div id="productionPlans" class="list"></div></section>
   </main>
 
   <div id="registryFormStore" hidden>
+<form id="productionPlanForm" class="panel"><fieldset class="form-section"><legend>Programação</legend><div class="form-section-fields"><label>Data programada<input name="scheduledDate" type="date" required></label><label class="span-2">Observação / destino<input name="notes" maxlength="1000" placeholder="Ex.: produção para as cargas de amanhã"></label></div></fieldset><div class="wide"><h4 class="form-section-title">Produtos a produzir</h4><div id="productionPlanRows"></div><button id="addProductionItem" type="button">Adicionar produto</button></div><div class="form-actions wide"><button type="button" data-cancel-edit="productionPlan">Cancelar</button><button type="submit" class="primary">Salvar programação</button></div></form>
+<form id="productionCompletionForm" class="panel"><p id="productionCompletionContext" class="wide"></p><label class="wide">Data de produção<input name="productionDate" type="date" required></label><div id="productionCompletionRows" class="wide"></div><div class="form-actions wide"><button type="button" data-cancel-edit="productionCompletion">Cancelar</button><button type="submit" class="primary">Confirmar e somar ao estoque</button></div></form>
+<form id="stockForm" class="panel">
+<fieldset class="form-section"><legend>Movimentação</legend><div class="form-section-fields"><label class="wide">Produto<select name="productId" required></select></label><label class="wide">Tipo<select name="kind" required><option value="">Selecione tipo</option><option value="Production">Produção de produtos acabados</option><option value="Receipt">Entrada de produtos</option><option value="Count">Contagem física / ajustar saldo</option></select></label><label id="stockProductionDate" class="wide" hidden>Data de produção<input name="productionDate" type="date" disabled></label><p id="stockFormHint" class="wide field-hint"></p><label class="wide">Quantidade<input name="quantity" type="number" min="0" max="999999999999" step="0.001" required placeholder="Informe a quantidade"></label><label class="wide">Motivo / documento<input name="reason" minlength="3" maxlength="500" placeholder="Ex.: produção do turno, lote, compra / nota ou contagem inicial" required></label></div></fieldset>
+<div class="form-actions wide"><button type="button" data-cancel-edit="stock">Cancelar</button><button class="primary" type="submit">Registrar movimento</button></div></form>
+<form id="deliveryCheckForm" class="panel">
+<p id="deliveryCheckContext" class="wide"></p><p id="deliveryLegacyHint" class="wide inventory-notice">Carga anterior ao controle de estoque: a conferência será registrada, sem alterar o saldo retroativamente.</p>
+<div class="wide"><h4 class="form-section-title">Conferência física dos produtos</h4><p>Informe a quantidade entregue ao cliente e a que voltou fisicamente ao depósito. A diferença aparece como faltante.</p><div class="card-actions"><button type="button" data-check-preset="delivered">Tudo entregue</button><button type="button" data-check-preset="returned">Tudo devolvido</button></div></div>
+<div id="deliveryCheckItems" class="wide"></div>
+<fieldset class="form-section"><legend>Recebimento e observações</legend><div class="form-section-fields"><p id="deliveryCheckTotal" class="wide"></p><label>Valor recebido<input name="amountReceived" type="number" min="0" step="0.01" required placeholder="Ex.: 0"></label><label class="span-2">Forma de pagamento<select name="paymentMethod" required><option value="">Selecione forma de pagamento</option><option value="0">Sem recebimento</option><option value="1">Dinheiro</option><option value="2">Pix</option><option value="3">Boleto</option><option value="4">Cheque</option><option value="5">Cartão</option><option value="6">Transferência</option><option value="7">Outro</option></select></label><label class="wide">Observação / divergência<input name="deliveryNotes" maxlength="1000" placeholder="Obrigatória quando houver produto faltante"></label></div></fieldset>
+<div class="form-actions wide"><button type="button" data-cancel-edit="delivery">Cancelar</button><button class="primary" type="submit">Registrar conferência</button></div></form>
+
 <form id="payableForm" class="panel">
           <h3 class="wide">Nova conta a pagar</h3>
-<fieldset class="form-section"><legend>Dados da conta</legend><div class="form-section-fields"><label class="wide">Descrição<input name="description" required></label>
-<label>Fornecedor<input name="supplierName"></label></div></fieldset>
+<fieldset class="form-section"><legend>Dados da conta</legend><div class="form-section-fields"><label class="wide">Descrição<input name="description" required placeholder="Informe descrição"></label>
+<label>Fornecedor<input name="supplierName" placeholder="Informe fornecedor"></label></div></fieldset>
 
-<fieldset class="form-section"><legend>Valor e vencimento</legend><div class="form-section-fields"><label>Valor<input name="amount" type="number" step="0.01" required></label>
+<fieldset class="form-section"><legend>Valor e vencimento</legend><div class="form-section-fields"><label>Valor<input name="amount" type="number" step="0.01" required placeholder="Ex.: 0"></label>
 <label>Vencimento<input name="dueDate" type="date" required></label></div></fieldset>
 
-<fieldset class="form-section"><legend>Informações adicionais</legend><div class="form-section-fields"><label class="wide">Observação<input name="notes"></label></div></fieldset>
+<fieldset class="form-section"><legend>Informações adicionais</legend><div class="form-section-fields"><label class="wide">Observação<input name="notes" placeholder="Informe observação"></label></div></fieldset>
 <div class="form-actions wide"><button class="wide" type="button" data-cancel-edit="payable">Cancelar</button><button class="primary wide" type="submit">Cadastrar conta a pagar</button></div>
         </form>
 <form id="receivableForm" class="panel">
           <h3 class="wide">Nova conta a receber</h3>
-<fieldset class="form-section"><legend>Dados da conta</legend><div class="form-section-fields"><label class="wide">Descrição<input name="description" required></label>
+<fieldset class="form-section"><legend>Dados da conta</legend><div class="form-section-fields"><label class="wide">Descrição<input name="description" required placeholder="Informe descrição"></label>
 <label>Cliente<select name="customerId"></select></label>
-<label>Pedido nº<input name="orderNumber" type="number"></label></div></fieldset>
+<label>Pedido nº<input name="orderNumber" type="number" placeholder="Ex.: 0"></label></div></fieldset>
 
-<fieldset class="form-section"><legend>Valor e vencimento</legend><div class="form-section-fields"><label>Valor<input name="amount" type="number" step="0.01" required></label>
+<fieldset class="form-section"><legend>Valor e vencimento</legend><div class="form-section-fields"><label>Valor<input name="amount" type="number" step="0.01" required placeholder="Ex.: 0"></label>
 <label>Vencimento<input name="dueDate" type="date" required></label></div></fieldset>
 
-<fieldset class="form-section"><legend>Informações adicionais</legend><div class="form-section-fields"><label class="wide">Observação<input name="notes"></label></div></fieldset>
+<fieldset class="form-section"><legend>Informações adicionais</legend><div class="form-section-fields"><label class="wide">Observação<input name="notes" placeholder="Informe observação"></label></div></fieldset>
 <div class="form-actions wide"><button class="wide" type="button" data-cancel-edit="receivable">Cancelar</button><button class="primary wide" type="submit">Cadastrar conta a receber</button></div>
         </form>
 <form id="customerForm" class="panel">
           <h3 class="wide">Novo cliente</h3>
-<fieldset class="form-section"><legend>Identificação</legend><div class="form-section-fields"><label class="wide">Razão social<input name="legalName" required></label>
-<label>CNPJ<input name="taxId" required></label>
-<label>Inscrição estadual<input name="stateRegistration"></label>
-<label>Nome fantasia<input name="tradeName"></label></div></fieldset>
+<fieldset class="form-section"><legend>Identificação</legend><div class="form-section-fields"><label class="wide">Razão social<input name="legalName" required placeholder="Informe razão social"></label>
+<label>CNPJ<input name="taxId" required placeholder="00.000.000/0000-00"></label>
+<label>Inscrição estadual<input name="stateRegistration" placeholder="Informe inscrição estadual"></label>
+<label>Nome fantasia<input name="tradeName" placeholder="Informe nome fantasia"></label></div></fieldset>
 
-<fieldset class="form-section"><legend>Contato</legend><div class="form-section-fields"><label>Telefone<input name="phone"></label>
-<label class="span-2">E-mail<input name="email"></label></div></fieldset>
+<fieldset class="form-section"><legend>Contato</legend><div class="form-section-fields"><label>Telefone<input name="phone" placeholder="Informe telefone"></label>
+<label class="span-2">E-mail<input name="email" placeholder="nome@empresa.com.br"></label></div></fieldset>
 
-<fieldset class="form-section"><legend>Endereço</legend><div class="form-section-fields"><label class="span-2">Rua<input name="street" required></label>
-<label>Número<input name="number" required></label>
-<label>Complemento<input name="complement"></label>
-<label>Bairro<input name="district" required></label>
-<label>Cidade<input name="city" required></label>
-<label>UF<input name="state" value="SP" maxlength="2" required></label>
-<label>CEP<input name="postalCode" required></label></div></fieldset>
+<fieldset class="form-section"><legend>Endereço</legend><div class="form-section-fields"><label class="span-2">Rua<input name="street" required placeholder="Informe rua"></label>
+<label>Número<input name="number" required placeholder="Informe número"></label>
+<label>Complemento<input name="complement" placeholder="Informe complemento"></label>
+<label>Bairro<input name="district" required placeholder="Informe bairro"></label>
+<label>Cidade<input name="city" required placeholder="Informe cidade"></label>
+<label>UF<input name="state" maxlength="2" required placeholder="Ex.: SP"></label>
+<label>CEP<input name="postalCode" required placeholder="00000-000"></label></div></fieldset>
 
 <fieldset class="form-section"><legend>Dados comerciais</legend><div class="form-section-fields"><label>Região<select name="regionId" required></select></label>
 <label>Vendedor<select name="sellerId" required></select></label></div></fieldset>
@@ -558,26 +577,26 @@
         </form>
 <form id="productForm" class="panel">
           <h3 class="wide">Novo produto</h3>
-<fieldset class="form-section"><legend>Identificação do produto</legend><div class="form-section-fields"><label>Código<input name="code" required></label>
-<label class="span-2">Nome<input name="name" required></label></div></fieldset>
+<fieldset class="form-section"><legend>Identificação do produto</legend><div class="form-section-fields"><label>Código<input name="code" required placeholder="Informe código"></label>
+<label class="span-2">Nome<input name="name" required placeholder="Informe nome"></label></div></fieldset>
 
-<fieldset class="form-section"><legend>Venda e embalagem</legend><div class="form-section-fields"><label>Unidade<input name="unit" value="FD" required></label>
-<label>Preço caixa/fardo<input name="salePrice" type="number" step="0.01" required></label>
-<label>Peso kg<input name="weightInKg" type="number" step="0.001" value="0"></label></div></fieldset>
+<fieldset class="form-section"><legend>Venda e embalagem</legend><div class="form-section-fields"><label>Unidade<input name="unit" required placeholder="Ex.: FD"></label>
+<label>Preço caixa/fardo<input name="salePrice" type="number" step="0.01" required placeholder="Ex.: 0"></label>
+<label>Peso kg<input name="weightInKg" type="number" step="0.001" placeholder="Ex.: 0"></label></div></fieldset>
 
-<fieldset class="form-section"><legend>Informações fiscais</legend><div class="form-section-fields"><label>NCM<input name="ncm"></label>
-<label>CEST<input name="cest"></label>
-<label>CFOP<input name="cfop"></label></div></fieldset>
+<fieldset class="form-section"><legend>Informações fiscais</legend><div class="form-section-fields"><label>NCM<input name="ncm" placeholder="Informe ncm"></label>
+<label>CEST<input name="cest" placeholder="Informe cest"></label>
+<label>CFOP<input name="cfop" placeholder="Informe cfop"></label></div></fieldset>
 <div class="form-actions wide"><button class="wide" type="button" data-cancel-edit="product">Cancelar</button><button class="primary wide" type="submit">Cadastrar produto</button></div>
         </form>
 <form id="sellerForm" class="panel">
           <h3 class="wide">Novo vendedor</h3>
-<fieldset class="form-section"><legend>Identificação</legend><div class="form-section-fields"><label>Código<input name="code" required></label>
-<label>Nome<input name="name" required></label></div></fieldset>
+<fieldset class="form-section"><legend>Identificação</legend><div class="form-section-fields"><label>Código<input name="code" required placeholder="Informe código"></label>
+<label>Nome<input name="name" required placeholder="Informe nome"></label></div></fieldset>
 
-<fieldset class="form-section"><legend>Contato e comissão</legend><div class="form-section-fields"><label>E-mail<input name="email" type="email"></label>
-<label>Telefone<input name="phone"></label>
-<label>Comissão %<input name="defaultCommissionPercentage" type="number" step="0.01"></label></div></fieldset>
+<fieldset class="form-section"><legend>Contato e comissão</legend><div class="form-section-fields"><label>E-mail<input name="email" type="email" placeholder="nome@empresa.com.br"></label>
+<label>Telefone<input name="phone" placeholder="Informe telefone"></label>
+<label>Comissão %<input name="defaultCommissionPercentage" type="number" step="0.01" placeholder="Ex.: 0"></label></div></fieldset>
 <div class="form-actions wide"><button class="wide" type="button" data-cancel-edit="seller">Cancelar</button><button class="primary wide" type="submit">Cadastrar vendedor</button></div>
         </form>
 <form id="regionForm" class="panel">
@@ -588,8 +607,8 @@
 <form id="vehicleForm" class="panel">
           <h3 class="wide">Novo veículo</h3>
 <fieldset class="form-section"><legend>Identificação do veículo</legend><div class="form-section-fields"><label>Nome<input name="name" placeholder="Kangoo Lucas" required></label>
-<label>Placa<input name="plate" required></label>
-<label class="wide">Modelo<input name="model"></label></div></fieldset>
+<label>Placa<input name="plate" required placeholder="Ex.: ABC1D23"></label>
+<label class="wide">Modelo<input name="model" placeholder="Informe modelo"></label></div></fieldset>
 <div class="form-actions wide"><button class="wide" type="button" data-cancel-edit="vehicle">Cancelar</button><button class="primary wide" type="submit">Cadastrar veículo</button></div>
         </form>
   </div>
@@ -625,9 +644,9 @@
   <dialog id="passwordDialog" aria-labelledby="passwordTitle">
     <form id="passwordForm" class="password-form">
       <div class="dialog-heading"><h2 id="passwordTitle">Alterar senha</h2><button id="closePassword" class="icon-button" type="button" aria-label="Fechar alteração de senha"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"></path></svg></button></div><p>Após salvar, entre novamente com a nova senha.</p>
-      <label>Senha atual<input name="currentPassword" type="password" autocomplete="current-password" required></label>
-      <label>Nova senha<input name="newPassword" type="password" autocomplete="new-password" minlength="8" maxlength="128" required></label>
-      <label>Confirme a nova senha<input name="confirmPassword" type="password" autocomplete="new-password" minlength="8" required></label>
+      <label>Senha atual<input name="currentPassword" type="password" autocomplete="current-password" required placeholder="Informe senha atual"></label>
+      <label>Nova senha<input name="newPassword" type="password" autocomplete="new-password" minlength="8" maxlength="128" required placeholder="Informe nova senha"></label>
+      <label>Confirme a nova senha<input name="confirmPassword" type="password" autocomplete="new-password" minlength="8" required placeholder="Informe confirme a nova senha"></label>
       <p id="passwordError" class="form-error" role="alert"></p>
       <div class="form-actions"><button id="cancelPassword" type="button">Cancelar</button><button class="primary" type="submit">Salvar nova senha</button></div>
     </form>
@@ -637,6 +656,8 @@
   <script src="vendor/flatpickr.min.js"></script>
   <script src="vendor/flatpickr-pt.js"></script>
   <script src="controls.js"></script>
+  <script src="inventory.js"></script>
+  <script src="production.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
