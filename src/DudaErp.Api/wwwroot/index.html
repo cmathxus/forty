@@ -1,31 +1,43 @@
-﻿<!doctype html>
+<!doctype html>
 <html lang="pt-BR">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Forty</title>
+  <title>FORTY</title>
+  <meta name="theme-color" content="#20274c">
+  <link rel="icon" type="image/svg+xml" href="forty-mark.svg">
+  <link rel="preload" href="fonts/plex-latin.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="vendor/tom-select.css">
+  <link rel="stylesheet" href="vendor/flatpickr.min.css">
   <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="controls.css">
 </head>
-<body>
+<body class="auth-locked">
+  <section id="loginScreen" class="login-screen" aria-labelledby="loginTitle">
+    <div class="login-art" aria-hidden="true"><span class="login-wordmark">FORTY<span>.</span></span><div class="shipping-art"><svg viewBox="0 0 460 340"><path d="m80 100 130-68 130 68-130 69zM80 100v140l130 70 130-70V100M210 169v141M145 65l130 70v48M80 239l75-41M340 240l-75-42"></path><path class="art-route" d="M22 280h45M370 78h68M365 270h60M55 35h30"></path><path class="art-arrow" d="M280 280h140m-25-25 25 25-25 25"></path></svg></div><p>Do pedido à entrega.</p><span class="login-art-caption">Pedidos, cargas e financeiro.</span></div><form id="loginForm" class="login-card">
+      <span class="login-context">Acesso ao FORTY</span><h2 id="loginTitle">Acesse sua<br>operação.</h2><p class="login-description">Entre na sua conta para acessar a operação.</p>
+      <label>E-mail<input name="email" type="email" autocomplete="username" required placeholder="voce@empresa.com.br"></label>
+      <label>Senha<input name="password" type="password" autocomplete="current-password" required></label>
+      <p id="loginError" class="form-error" role="alert"></p>
+      <button class="primary" type="submit">Entrar</button>
+      <span class="login-help">Precisa de acesso? Fale com o administrador.</span>
+    </form>
+  </section>
   <aside id="sidebar">
     <div class="brand">
-      <h1>FORTY</h1>
-      <button id="sidebarToggle" class="sidebar-toggle" type="button" title="Minimizar menu" aria-label="Minimizar menu">
-        <svg class="sidebar-toggle-icon" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <rect width="18" height="18" x="3" y="3" rx="2"></rect>
-          <path d="M9 3v18"></path>
-          <path d="m16 15-3-3 3-3"></path>
-        </svg>
+      <div class="brand-lockup"><h1>FORTY</h1><span>Gestão de distribuição</span></div>
+      <button id="sidebarToggle" aria-controls="mainNavigation" class="sidebar-toggle" type="button" title="Minimizar menu" aria-label="Minimizar menu">
+        <svg class="sidebar-toggle-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"></path></svg>
       </button>
     </div>
 
-    <nav class="sidebar-nav">
+    <nav id="mainNavigation" class="sidebar-nav" aria-label="Navegação principal">
       <button data-view="dashboard" class="nav-link active">
-        <span class="nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 13h8V3H3z"></path><path d="M13 21h8V11h-8z"></path><path d="M13 3h8v6h-8z"></path><path d="M3 21h8v-6H3z"></path></svg></span>
-        <span class="nav-text">Dashboard</span>
+        <span class="nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m3 10 9-7 9 7"></path><path d="M5 9v11h5v-6h4v6h5V9"></path></svg></span>
+        <span class="nav-text">Início</span>
       </button>
 
-      <div class="nav-group open">
+      <div class="nav-group">
         <button type="button" class="nav-group-title" data-menu-toggle="operation">
           <span class="nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 17h4V5H2v12h3"></path><path d="M19 17h3v-6l-3-4h-5"></path><circle cx="7.5" cy="17.5" r="2.5"></circle><circle cx="17.5" cy="17.5" r="2.5"></circle></svg></span>
           <span class="nav-text">Operação</span>
@@ -77,15 +89,12 @@
           <button data-view="reportSalesPosition" class="nav-link sub-link"><span class="nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3v18h18"></path><path d="M7 15l4-4 3 3 5-7"></path><path d="M14 7h5v5"></path></svg></span><span class="nav-text">Posição de vendas</span></button>
           <button data-view="reportCustomers" class="nav-link sub-link"><span class="nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"></circle><path d="M4 21a8 8 0 0 1 16 0"></path></svg></span><span class="nav-text">Clientes</span></button>
           <button data-view="reportProducts" class="nav-link sub-link"><span class="nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 8a2 2 0 0 0-1-1.73L13 2.27a2 2 0 0 0-2 0L4 6.27A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><path d="M3.3 7 12 12l8.7-5"></path><path d="M12 22V12"></path></svg></span><span class="nav-text">Produtos</span></button>
-          
+
         </div>
       </div>
     </nav>
-  </aside>
-
-  <main>
-    <div class="topbar">
-      <div class="topbar-spacer"></div>
+    <div class="navbar-actions">
+      <button id="refreshData" class="refresh-button" type="button" aria-label="Atualizar dados" title="Atualizar dados"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 7v5h-5M4 17v-5h5"></path><path d="M6.1 7a7 7 0 0 1 11.6-1L20 9M4 15l2.3 3A7 7 0 0 0 17.9 17"></path></svg><span>Atualizar</span></button>
       <div class="notification-area">
         <button id="notificationButton" class="notification-button" type="button" aria-expanded="false" aria-label="Notificações">
           <svg class="bell-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
@@ -100,60 +109,56 @@
           <div id="notificationList" class="notification-list"></div>
         </div>
       </div>
+      <button id="profileButton" class="profile-button" type="button" aria-label="Abrir perfil" aria-haspopup="dialog" aria-expanded="false" aria-controls="profileDialog"><span class="avatar" id="profileInitials" aria-hidden="true">A</span><span class="profile-trigger-name" id="profileTriggerName">Minha conta</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m8 10 4 4 4-4"></path></svg></button>
+    </div>
+  </aside>
+
+  <main>
+    <div class="topbar">
+      <div class="workspace-title"><strong id="workspaceLocation">Operação / Visão geral</strong><span id="syncStatus" role="status">Carregando dados…</span></div>
+
     </div>
 
     <section id="dashboard" class="view active">
-      <header class="dashboard-hero">
-        <div>
-          <span class="eyebrow">Visão geral</span>
-          <h2>Dashboard operacional</h2>
-          <p>Acompanhe pedidos, cargas na rua e contas próximas sem precisar abrir cada tela.</p>
-        </div>
-        <div class="hero-actions">
-          <button class="primary" type="button" data-view-shortcut="orders">Novo pedido</button>
-          <button type="button" data-view-shortcut="loads">Montar carga</button>
-        </div>
+      <header class="dashboard-header">
+        <div><h2>Painel de operação</h2><p id="dashboardDate" class="dashboard-date"></p></div>
+        <button class="dispatch-link" type="button" data-view-shortcut="reportLoading"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7h11v10H3zM14 11h4l3 3v3h-7"></path><circle cx="7" cy="18" r="2"></circle><circle cx="18" cy="18" r="2"></circle></svg>Abrir expedição</button>
       </header>
-
-      <div id="metrics" class="metrics dashboard-metrics"></div>
-
-      <div class="dashboard-grid">
-        <div class="panel dashboard-card">
-          <div class="section-title wide">
-            <h3>Atalhos rápidos</h3>
-            <span>Fluxos mais usados no dia</span>
+      <div class="operations-overview">
+        <section class="order-summary" aria-labelledby="orderSummaryTitle">
+          <div class="summary-top"><h3 id="orderSummaryTitle">Pedidos para carregar</h3><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h12v18H6zM9 8h6M9 12h6M9 16h3"></path></svg></div>
+          <strong id="waitingOrderValue">R$ 0,00</strong>
+          <p id="waitingOrderCount">0 pedidos confirmados</p>
+          <div class="summary-actions"><button class="order-action" type="button" data-create="order">Novo pedido <span aria-hidden="true">+</span></button><button class="summary-load-link" type="button" data-create="load">Montar carga</button></div>
+        </section>
+        <section class="operation-flow" aria-labelledby="operationFlowTitle">
+          <div class="flow-heading"><h3 id="operationFlowTitle">Da separação à rua</h3><span>Andamento da operação</span></div>
+          <div class="flow-stages">
+            <button class="flow-stage waiting" type="button" data-view-shortcut="orders"><span class="stage-label">Aguardando carga</span><strong id="flowWaiting">0</strong><span class="stage-detail">pedidos confirmados <span aria-hidden="true">↗</span></span></button>
+            <button class="flow-stage preparing" type="button" data-view-shortcut="loads"><span class="stage-label">Em preparação</span><strong id="flowPreparing">0</strong><span class="stage-detail">cargas abertas <span aria-hidden="true">↗</span></span></button>
+            <button class="flow-stage on-route" type="button" data-view-shortcut="loads"><span class="stage-label">Em rota</span><strong id="flowOnRoute">0</strong><span class="stage-detail">cargas na rua <span aria-hidden="true">↗</span></span></button>
           </div>
-          <div class="quick-actions wide">
-            <button type="button" data-view-shortcut="orders">Lançar pedido</button>
-            <button type="button" data-view-shortcut="loads">Programar rua</button>
-            <button type="button" data-view-shortcut="reportLoading">PDF carregamento</button>
-            <button type="button" data-view-shortcut="payables">Contas a pagar</button>
-          </div>
-        </div>
-
-        <div class="panel dashboard-card">
-          <div class="section-title wide">
-            <h3>Próximas ações</h3>
-            <span id="dashboardActionCount"></span>
-          </div>
-          <div id="dashboardActions" class="dashboard-list wide"></div>
-        </div>
-
-        <div class="panel dashboard-card wide-card">
-          <div class="section-title wide">
-            <h3>Últimos pedidos</h3>
-            <span>Resumo para conferência rápida</span>
-          </div>
-          <div id="dashboardRecentOrders" class="dashboard-list wide"></div>
-        </div>
+          <div class="flow-footer"><span class="route-dot" aria-hidden="true"></span><span id="flowSummary">Nenhuma carga em rota.</span><button class="text-button" type="button" data-view-shortcut="loads">Ver cargas</button></div>
+        </section>
       </div>
+      <div id="metrics" class="metrics dashboard-metrics"></div>
+      <div class="dashboard-grid">
+        <section class="panel dashboard-card recent-orders">
+          <div class="section-title wide"><div><h3>Últimos pedidos</h3><span id="dashboardOrderCount"></span></div><button class="text-button" type="button" data-view-shortcut="orders">Todos os pedidos</button></div>
+          <div id="dashboardRecentOrders" class="dashboard-list wide"></div>
+        </section>
+        <section class="panel dashboard-card attention-panel">
+          <div class="section-title wide"><h3>Próximos passos</h3><span id="dashboardActionCount"></span></div>
+          <div id="dashboardActions" class="dashboard-list wide"></div>
+        </section>
+      </div>
+      <div class="dashboard-tools"><span>Acesso direto</span><button type="button" data-view-shortcut="customers">Clientes</button><button type="button" data-view-shortcut="products">Produtos</button><button type="button" data-view-shortcut="receivables">Contas a receber</button><button type="button" data-view-shortcut="reportSalesPosition">Posição de vendas</button></div>
     </section>
 
     <section id="orders" class="view">
       <header>
         <div>
-          <h2>Pedido rápido</h2>
-          <p>Código do produto, quantidade e pronto. O preço vem do cadastro, mas pode ser ajustado no item.</p>
+          <h2>Pedidos e executados</h2>
         </div>
       </header>
 
@@ -162,16 +167,16 @@
           <h3>Novo pedido</h3>
           <span id="orderPreviewTotal">Total previsto R$ 0,00</span>
         </div>
-
-        <label class="wide">Cliente
+<fieldset class="form-section"><legend>Cliente e vendedor</legend><div class="form-section-fields"><label class="wide" hidden>Cliente
           <input id="customerSearch" placeholder="Digite parte do nome ou CNPJ">
           <span id="customerSelected" class="field-hint">Digite para filtrar a lista abaixo.</span>
         </label>
-        <label class="wide order-customer-select">Lista de clientes encontrados
+<label class="span-2 order-customer-select">Cliente
           <select name="customerId" required></select>
         </label>
-        <label>Vendedor<select name="sellerId"></select></label>
-        <label>Condição de pagamento
+<label>Vendedor<select name="sellerId"></select></label></div></fieldset>
+
+<fieldset class="form-section"><legend>Pagamento e faturamento</legend><div class="form-section-fields"><label>Condição de pagamento
           <select name="paymentCondition">
             <option value="">Selecione</option>
             <option value="À vista">À vista</option>
@@ -183,26 +188,31 @@
             <option value="45 ddl">45 ddl</option>
           </select>
         </label>
-        <label>Vencimento<input name="dueDate" type="date"></label>
-        <label class="check"><input name="isFiscalInvoiceRequested" type="checkbox"> Emitir NF-e</label>
-        <label class="wide">Observações<input name="notes" placeholder="ex: boleto Bradesco, entregar de manhã"></label>
+<label>Vencimento<input name="dueDate" type="date"></label>
+<label class="check"><input name="isFiscalInvoiceRequested" type="checkbox"> Emitir NF-e</label></div></fieldset>
 
-        <div class="items wide">
+<fieldset class="form-section"><legend>Informações adicionais</legend><div class="form-section-fields"><label class="wide">Observações<input name="notes" placeholder="ex: boleto Bradesco, entregar de manhã"></label></div></fieldset>
+<div class="items wide"><h4 class="form-section-title">Itens do pedido</h4>
           <div class="row head"><span>Código</span><span>Qtd.</span><span>Preço</span><span>Total</span><span>Produto encontrado</span><span></span></div>
           <div id="itemRows"></div>
           <button type="button" id="addItem">Adicionar item</button>
         </div>
 
-        <button class="primary wide" type="submit">Salvar pedido</button>
-        <button class="wide" type="button" data-cancel-edit="order">Cancelar edição</button>
+        <div class="form-actions wide"><button class="wide" type="button" data-cancel-edit="order">Cancelar</button><button class="primary wide" type="submit">Salvar pedido</button></div>
       </form>
 
       <div class="panel list-panel">
         <div class="section-title wide">
           <h3>Últimos pedidos</h3>
-          <span>Use o executado para mostrar o formato de impressão</span>
+          <span></span>
+        </div>
+        <div class="list-toolbar">
+          <label>Buscar pedido<input id="orderSearch" type="search" placeholder="Número, cliente ou vendedor"></label>
+          <label>Situação<select id="orderStatusFilter"><option value="">Todas</option><option value="Confirmed">Confirmado</option><option value="Scheduled">Em carga</option><option value="Delivered">Entregue</option><option value="PartiallyDelivered">Entrega parcial</option><option value="Returned">Retornado</option></select></label>
+          <span id="orderCount" role="status"></span>
         </div>
         <div id="ordersList" class="list"></div>
+        <button id="moreOrders" type="button" hidden>Mostrar mais pedidos</button>
       </div>
     </section>
 
@@ -219,17 +229,18 @@
           <h3>Nova carga</h3>
           <span>Somente pedidos confirmados aparecem aqui</span>
         </div>
-        <label>Data<input name="scheduledDate" type="date" required></label>
-        <label>Região<select name="regionId" required></select></label>
-        <label>Veículo<select name="vehicleId"></select></label>
-        <label>Motorista<input name="driverName" placeholder="nome do entregador"></label>
-        <label class="wide">Observações<input name="notes"></label>
-        <div class="wide">
+<fieldset class="form-section"><legend>Programação da carga</legend><div class="form-section-fields"><label>Data<input name="scheduledDate" type="date" required></label>
+<label>Região<select name="regionId" required></select></label></div></fieldset>
+
+<fieldset class="form-section"><legend>Transporte</legend><div class="form-section-fields"><label>Veículo<select name="vehicleId"></select></label>
+<label>Motorista<input name="driverName" placeholder="nome do entregador"></label></div></fieldset>
+
+<fieldset class="form-section"><legend>Informações adicionais</legend><div class="form-section-fields"><label class="wide">Observações<input name="notes"></label></div></fieldset>
+<div class="wide">
           <h3>Pedidos disponíveis</h3>
           <div id="loadOrderChoices" class="choices"></div>
         </div>
-        <button class="primary wide" type="submit">Criar carga</button>
-        <button class="wide" type="button" data-cancel-edit="load">Cancelar edição</button>
+        <div class="form-actions wide"><button class="wide" type="button" data-cancel-edit="load">Cancelar</button><button class="primary wide" type="submit">Criar carga</button></div>
       </form>
 
       <div class="panel list-panel">
@@ -245,7 +256,7 @@
       <header>
         <div>
           <h2>Relatório de pedidos e executados</h2>
-          <p>Filtre antes de gerar o PDF.</p>
+          <p>Consulte os pedidos por cliente, situação e período.</p>
         </div>
       </header>
       <form class="panel report-filter-panel" data-report-form="orders">
@@ -270,7 +281,7 @@
         </label>
         <label>Vencimento inicial<input name="from" type="date"></label>
         <label>Vencimento final<input name="to" type="date"></label>
-        <button class="primary" type="button" data-report="orders">Gerar PDF</button>
+        <button class="primary" type="button" data-report="orders">Abrir relatório</button>
       </form>
     </section>
 
@@ -286,7 +297,7 @@
         <label class="span-2">Produto<select name="productCode" data-report-product></select></label>
         <label>Emissão inicial<input name="from" type="date"></label>
         <label>Emissão final<input name="to" type="date"></label>
-        <button class="primary" type="button" data-report="salesPosition">Gerar PDF</button>
+        <button class="primary" type="button" data-report="salesPosition">Abrir relatório</button>
       </form>
     </section>
 
@@ -309,7 +320,7 @@
         </label>
         <label>Data inicial<input name="from" type="date"></label>
         <label>Data final<input name="to" type="date"></label>
-        <button class="primary" type="button" data-report="loads">Gerar PDF</button>
+        <button class="primary" type="button" data-report="loads">Abrir relatório</button>
       </form>
     </section>
 
@@ -324,7 +335,7 @@
         <label>Região<select name="regionId" data-report-region></select></label>
         <label>Data inicial<input name="from" type="date"></label>
         <label>Data final<input name="to" type="date"></label>
-        <button class="primary" type="button" data-report="loading">Gerar PDF</button>
+        <button class="primary" type="button" data-report="loading">Abrir relatório</button>
       </form>
     </section>
 
@@ -338,7 +349,7 @@
       <form class="panel report-filter-panel" data-report-form="customers">
         <label>Busca<input name="search" placeholder="Nome, CNPJ, cidade ou telefone"></label>
         <label>Região<select name="regionId" data-report-region></select></label>
-        <button class="primary" type="button" data-report="customers">Gerar PDF</button>
+        <button class="primary" type="button" data-report="customers">Abrir relatório</button>
       </form>
     </section>
 
@@ -351,15 +362,16 @@
       </header>
       <form class="panel report-filter-panel" data-report-form="products">
         <label class="wide">Busca<input name="search" placeholder="Código, produto, NCM ou CEST"></label>
-        <button class="primary" type="button" data-report="products">Gerar PDF</button>
+        <button class="primary" type="button" data-report="products">Abrir relatório</button>
       </form>
     </section>
-    <section id="payables" class="view">
+    <section id="payables" class="view registry-page">
       <header>
         <div>
           <h2>Contas a pagar</h2>
-          <p>Cadastre, edite, remova e dê baixa nas contas da empresa.</p>
+          <p>Vencimentos, pagamentos e compromissos da empresa.</p>
         </div>
+      <button class="primary registry-new" type="button" data-create="payable"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>Nova conta</button>
       </header>
       <div class="split">
         <div class="panel list-panel">
@@ -369,25 +381,17 @@
           </div>
           <div id="payablesList" class="list compact-list"></div>
         </div>
-        <form id="payableForm" class="panel">
-          <h3 class="wide">Nova conta a pagar</h3>
-          <label class="wide">Descrição<input name="description" required></label>
-          <label>Fornecedor<input name="supplierName"></label>
-          <label>Vencimento<input name="dueDate" type="date" required></label>
-          <label>Valor<input name="amount" type="number" step="0.01" required></label>
-          <label class="wide">Observação<input name="notes"></label>
-          <button class="primary wide" type="submit">Cadastrar conta a pagar</button>
-          <button class="wide" type="button" data-cancel-edit="payable">Cancelar edição</button>
-        </form>
+
       </div>
     </section>
 
-    <section id="receivables" class="view">
+    <section id="receivables" class="view registry-page">
       <header>
         <div>
           <h2>Contas a receber</h2>
-          <p>Cadastre, edite, remova e dê baixa nos recebimentos.</p>
+          <p>Recebimentos, clientes e valores em aberto.</p>
         </div>
+      <button class="primary registry-new" type="button" data-create="receivable"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>Nova conta</button>
       </header>
       <div class="split">
         <div class="panel list-panel">
@@ -397,25 +401,16 @@
           </div>
           <div id="receivablesList" class="list compact-list"></div>
         </div>
-        <form id="receivableForm" class="panel">
-          <h3 class="wide">Nova conta a receber</h3>
-          <label class="wide">Descrição<input name="description" required></label>
-          <label>Cliente<select name="customerId"></select></label>
-          <label>Pedido nº<input name="orderNumber" type="number"></label>
-          <label>Vencimento<input name="dueDate" type="date" required></label>
-          <label>Valor<input name="amount" type="number" step="0.01" required></label>
-          <label class="wide">Observação<input name="notes"></label>
-          <button class="primary wide" type="submit">Cadastrar conta a receber</button>
-          <button class="wide" type="button" data-cancel-edit="receivable">Cancelar edição</button>
-        </form>
+
       </div>
     </section>
-    <section id="customers" class="view">
+    <section id="customers" class="view registry-page">
       <header>
         <div>
           <h2>Clientes</h2>
-          <p>Consulte os clientes importados e cadastre novos clientes quando precisar.</p>
+          <p>Dados comerciais, endereços e regiões de entrega.</p>
         </div>
+      <button class="primary registry-new" type="button" data-create="customer"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>Novo cliente</button>
       </header>
       <div class="split">
         <div class="panel list-panel">
@@ -426,32 +421,17 @@
           <input class="filter-input" data-filter="customers" placeholder="Filtrar por nome, CNPJ, cidade ou telefone">
           <div id="customersList" class="list compact-list"></div>
         </div>
-        <form id="customerForm" class="panel">
-          <h3 class="wide">Novo cliente</h3>
-          <label class="wide">Razao social<input name="legalName" required></label>
-          <label>CNPJ<input name="taxId" required></label>
-          <label>Telefone<input name="phone"></label>
-          <label class="wide">Email<input name="email"></label>
-          <label class="span-2">Rua<input name="street" required></label>
-          <label>Numero<input name="number" required></label>
-          <label>Bairro<input name="district" required></label>
-          <label>Cidade<input name="city" required></label>
-          <label>UF<input name="state" value="SP" maxlength="2" required></label>
-          <label>CEP<input name="postalCode" required></label>
-        <label>Região<select name="regionId" required></select></label>
-          <label>Vendedor<select name="sellerId" required></select></label>
-          <button class="primary wide" type="submit">Cadastrar cliente</button>
-          <button class="wide" type="button" data-cancel-edit="customer">Cancelar edição</button>
-        </form>
+
       </div>
     </section>
 
-    <section id="products" class="view">
+    <section id="products" class="view registry-page">
       <header>
         <div>
           <h2>Produtos</h2>
-          <p>Produtos importados do Omie com preço por caixa/fardo, NCM, CEST e códigos de barra.</p>
+          <p>Catálogo, preços por embalagem e informações fiscais.</p>
         </div>
+      <button class="primary registry-new" type="button" data-create="product"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>Novo produto</button>
       </header>
       <div class="split">
         <div class="panel list-panel">
@@ -462,28 +442,17 @@
           <input class="filter-input" data-filter="products" placeholder="Filtrar por codigo, nome, NCM ou CEST">
           <div id="productsList" class="list compact-list"></div>
         </div>
-        <form id="productForm" class="panel">
-          <h3 class="wide">Novo produto</h3>
-          <label>Código<input name="code" required></label>
-          <label class="span-2">Nome<input name="name" required></label>
-          <label>Unidade<input name="unit" value="FD" required></label>
-          <label>Preço caixa/fardo<input name="salePrice" type="number" step="0.01" required></label>
-          <label>Peso kg<input name="weightInKg" type="number" step="0.001" value="0"></label>
-          <label>NCM<input name="ncm"></label>
-          <label>CEST<input name="cest"></label>
-          <label>CFOP<input name="cfop"></label>
-          <button class="primary wide" type="submit">Cadastrar produto</button>
-          <button class="wide" type="button" data-cancel-edit="product">Cancelar edição</button>
-        </form>
+
       </div>
     </section>
 
-    <section id="sellers" class="view">
+    <section id="sellers" class="view registry-page">
       <header>
         <div>
           <h2>Vendedores</h2>
-          <p>Identifique o vendedor no pedido e facilite acerto/comissão depois.</p>
+          <p>Equipe de vendas, contatos e comissões.</p>
         </div>
+      <button class="primary registry-new" type="button" data-create="seller"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>Novo vendedor</button>
       </header>
       <div class="split">
         <div class="panel list-panel">
@@ -494,25 +463,17 @@
           <input class="filter-input" data-filter="sellers" placeholder="Filtrar por codigo ou nome">
           <div id="sellersList" class="list compact-list"></div>
         </div>
-        <form id="sellerForm" class="panel">
-          <h3 class="wide">Novo vendedor</h3>
-          <label>Código<input name="code" required></label>
-          <label>Nome<input name="name" required></label>
-          <label>Email<input name="email" type="email"></label>
-          <label>Telefone<input name="phone"></label>
-          <label>Comissão %<input name="defaultCommissionPercentage" type="number" step="0.01"></label>
-          <button class="primary wide" type="submit">Cadastrar vendedor</button>
-          <button class="wide" type="button" data-cancel-edit="seller">Cancelar edição</button>
-        </form>
+
       </div>
     </section>
 
-    <section id="regions" class="view">
+    <section id="regions" class="view registry-page">
       <header>
         <div>
           <h2>Regiões</h2>
           <p>Use regiões para separar pedidos por rota, cidade ou área de entrega.</p>
         </div>
+      <button class="primary registry-new" type="button" data-create="region"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>Nova região</button>
       </header>
       <div class="split">
         <div class="panel list-panel">
@@ -523,21 +484,17 @@
           <input class="filter-input" data-filter="regions" placeholder="Filtrar por nome">
           <div id="regionsList" class="list compact-list"></div>
         </div>
-        <form id="regionForm" class="panel">
-          <h3 class="wide">Nova região</h3>
-          <label class="wide">Nome<input name="name" placeholder="Osasco" required></label>
-          <button class="primary wide" type="submit">Cadastrar região</button>
-          <button class="wide" type="button" data-cancel-edit="region">Cancelar edição</button>
-        </form>
+
       </div>
     </section>
 
-    <section id="vehicles" class="view">
+    <section id="vehicles" class="view registry-page">
       <header>
         <div>
           <h2>Veículos</h2>
-          <p>Cadastre caminhões, vans e carros usados na saída pra rua.</p>
+          <p>Frota disponível para montar as cargas.</p>
         </div>
+      <button class="primary registry-new" type="button" data-create="vehicle"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>Novo veículo</button>
       </header>
       <div class="split">
         <div class="panel list-panel">
@@ -548,41 +505,138 @@
           <input class="filter-input" data-filter="vehicles" placeholder="Filtrar por nome, placa ou modelo">
           <div id="vehiclesList" class="list compact-list"></div>
         </div>
-        <form id="vehicleForm" class="panel">
-          <h3 class="wide">Novo veículo</h3>
-          <label>Nome<input name="name" placeholder="Kangoo Lucas" required></label>
-          <label>Placa<input name="plate" required></label>
-          <label class="wide">Modelo<input name="model"></label>
-          <button class="primary wide" type="submit">Cadastrar veículo</button>
-          <button class="wide" type="button" data-cancel-edit="vehicle">Cancelar edição</button>
-        </form>
+
       </div>
     </section>
   </main>
+
+  <div id="registryFormStore" hidden>
+<form id="payableForm" class="panel">
+          <h3 class="wide">Nova conta a pagar</h3>
+<fieldset class="form-section"><legend>Dados da conta</legend><div class="form-section-fields"><label class="wide">Descrição<input name="description" required></label>
+<label>Fornecedor<input name="supplierName"></label></div></fieldset>
+
+<fieldset class="form-section"><legend>Valor e vencimento</legend><div class="form-section-fields"><label>Valor<input name="amount" type="number" step="0.01" required></label>
+<label>Vencimento<input name="dueDate" type="date" required></label></div></fieldset>
+
+<fieldset class="form-section"><legend>Informações adicionais</legend><div class="form-section-fields"><label class="wide">Observação<input name="notes"></label></div></fieldset>
+<div class="form-actions wide"><button class="wide" type="button" data-cancel-edit="payable">Cancelar</button><button class="primary wide" type="submit">Cadastrar conta a pagar</button></div>
+        </form>
+<form id="receivableForm" class="panel">
+          <h3 class="wide">Nova conta a receber</h3>
+<fieldset class="form-section"><legend>Dados da conta</legend><div class="form-section-fields"><label class="wide">Descrição<input name="description" required></label>
+<label>Cliente<select name="customerId"></select></label>
+<label>Pedido nº<input name="orderNumber" type="number"></label></div></fieldset>
+
+<fieldset class="form-section"><legend>Valor e vencimento</legend><div class="form-section-fields"><label>Valor<input name="amount" type="number" step="0.01" required></label>
+<label>Vencimento<input name="dueDate" type="date" required></label></div></fieldset>
+
+<fieldset class="form-section"><legend>Informações adicionais</legend><div class="form-section-fields"><label class="wide">Observação<input name="notes"></label></div></fieldset>
+<div class="form-actions wide"><button class="wide" type="button" data-cancel-edit="receivable">Cancelar</button><button class="primary wide" type="submit">Cadastrar conta a receber</button></div>
+        </form>
+<form id="customerForm" class="panel">
+          <h3 class="wide">Novo cliente</h3>
+<fieldset class="form-section"><legend>Identificação</legend><div class="form-section-fields"><label class="wide">Razão social<input name="legalName" required></label>
+<label>CNPJ<input name="taxId" required></label>
+<label>Inscrição estadual<input name="stateRegistration"></label>
+<label>Nome fantasia<input name="tradeName"></label></div></fieldset>
+
+<fieldset class="form-section"><legend>Contato</legend><div class="form-section-fields"><label>Telefone<input name="phone"></label>
+<label class="span-2">E-mail<input name="email"></label></div></fieldset>
+
+<fieldset class="form-section"><legend>Endereço</legend><div class="form-section-fields"><label class="span-2">Rua<input name="street" required></label>
+<label>Número<input name="number" required></label>
+<label>Complemento<input name="complement"></label>
+<label>Bairro<input name="district" required></label>
+<label>Cidade<input name="city" required></label>
+<label>UF<input name="state" value="SP" maxlength="2" required></label>
+<label>CEP<input name="postalCode" required></label></div></fieldset>
+
+<fieldset class="form-section"><legend>Dados comerciais</legend><div class="form-section-fields"><label>Região<select name="regionId" required></select></label>
+<label>Vendedor<select name="sellerId" required></select></label></div></fieldset>
+<div class="form-actions wide"><button class="wide" type="button" data-cancel-edit="customer">Cancelar</button><button class="primary wide" type="submit">Cadastrar cliente</button></div>
+        </form>
+<form id="productForm" class="panel">
+          <h3 class="wide">Novo produto</h3>
+<fieldset class="form-section"><legend>Identificação do produto</legend><div class="form-section-fields"><label>Código<input name="code" required></label>
+<label class="span-2">Nome<input name="name" required></label></div></fieldset>
+
+<fieldset class="form-section"><legend>Venda e embalagem</legend><div class="form-section-fields"><label>Unidade<input name="unit" value="FD" required></label>
+<label>Preço caixa/fardo<input name="salePrice" type="number" step="0.01" required></label>
+<label>Peso kg<input name="weightInKg" type="number" step="0.001" value="0"></label></div></fieldset>
+
+<fieldset class="form-section"><legend>Informações fiscais</legend><div class="form-section-fields"><label>NCM<input name="ncm"></label>
+<label>CEST<input name="cest"></label>
+<label>CFOP<input name="cfop"></label></div></fieldset>
+<div class="form-actions wide"><button class="wide" type="button" data-cancel-edit="product">Cancelar</button><button class="primary wide" type="submit">Cadastrar produto</button></div>
+        </form>
+<form id="sellerForm" class="panel">
+          <h3 class="wide">Novo vendedor</h3>
+<fieldset class="form-section"><legend>Identificação</legend><div class="form-section-fields"><label>Código<input name="code" required></label>
+<label>Nome<input name="name" required></label></div></fieldset>
+
+<fieldset class="form-section"><legend>Contato e comissão</legend><div class="form-section-fields"><label>E-mail<input name="email" type="email"></label>
+<label>Telefone<input name="phone"></label>
+<label>Comissão %<input name="defaultCommissionPercentage" type="number" step="0.01"></label></div></fieldset>
+<div class="form-actions wide"><button class="wide" type="button" data-cancel-edit="seller">Cancelar</button><button class="primary wide" type="submit">Cadastrar vendedor</button></div>
+        </form>
+<form id="regionForm" class="panel">
+          <h3 class="wide">Nova região</h3>
+<fieldset class="form-section"><legend>Identificação da região</legend><div class="form-section-fields"><label class="wide">Nome<input name="name" placeholder="Osasco" required></label></div></fieldset>
+<div class="form-actions wide"><button class="wide" type="button" data-cancel-edit="region">Cancelar</button><button class="primary wide" type="submit">Cadastrar região</button></div>
+        </form>
+<form id="vehicleForm" class="panel">
+          <h3 class="wide">Novo veículo</h3>
+<fieldset class="form-section"><legend>Identificação do veículo</legend><div class="form-section-fields"><label>Nome<input name="name" placeholder="Kangoo Lucas" required></label>
+<label>Placa<input name="plate" required></label>
+<label class="wide">Modelo<input name="model"></label></div></fieldset>
+<div class="form-actions wide"><button class="wide" type="button" data-cancel-edit="vehicle">Cancelar</button><button class="primary wide" type="submit">Cadastrar veículo</button></div>
+        </form>
+  </div>
 
   <div id="valeModal" class="modal" aria-hidden="true">
     <div class="modal-card">
       <div class="modal-actions">
         <button id="printVale">Imprimir</button>
-        <button id="closeVale">Fechar</button>
+        <button id="closeVale" class="icon-button" type="button" aria-label="Fechar executado"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"></path></svg></button>
       </div>
       <div id="valeContent"></div>
     </div>
   </div>
 
-  <div id="editModal" class="modal" aria-hidden="true">
+  <div id="editModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="editModalTitle" aria-hidden="true">
     <div class="modal-card edit-modal-card">
       <div class="modal-actions edit-modal-actions">
         <strong id="editModalTitle">Editar item</strong>
-        <button id="closeEditModal" type="button">Fechar</button>
+        <button id="closeEditModal" class="icon-button" type="button" aria-label="Fechar formulário"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"></path></svg></button>
       </div>
       <div id="editModalBody" class="edit-modal-body"></div>
     </div>
   </div>
 
-  <div id="toast"></div>
+  <div id="toast" role="status" aria-live="polite"></div>
+  <dialog id="profileDialog" class="profile-drawer" aria-labelledby="profileTitle">
+    <div class="profile-drawer-header"><h2 id="profileTitle">Meu perfil</h2><button id="closeProfile" class="icon-button" type="button" aria-label="Fechar perfil"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"></path></svg></button></div>
+    <div class="profile-identity"><span class="avatar avatar-large" id="profileAvatar" aria-hidden="true">A</span><strong id="profileName">Minha conta</strong><span id="profileRole" class="profile-role"></span></div>
+    <div class="profile-section"><h3>Dados da conta</h3><dl><dt>E-mail</dt><dd id="profileEmail"></dd><dt>Perfil de acesso</dt><dd id="profileAccess"></dd></dl></div>
+    <div class="profile-section"><h3>Segurança</h3><button id="changePassword" class="profile-action" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="10" width="14" height="11" rx="2"></rect><path d="M8 10V6a4 4 0 0 1 8 0v4M12 14v3"></path></svg><span><strong>Alterar senha</strong><small>Atualize a senha da sua conta</small></span><span aria-hidden="true">›</span></button></div>
+    <div class="profile-session"><span>Conectado ao FORTY</span><button id="logout" type="button">Sair da conta</button></div>
+  </dialog>
+  <dialog id="passwordDialog" aria-labelledby="passwordTitle">
+    <form id="passwordForm" class="password-form">
+      <div class="dialog-heading"><h2 id="passwordTitle">Alterar senha</h2><button id="closePassword" class="icon-button" type="button" aria-label="Fechar alteração de senha"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"></path></svg></button></div><p>Após salvar, entre novamente com a nova senha.</p>
+      <label>Senha atual<input name="currentPassword" type="password" autocomplete="current-password" required></label>
+      <label>Nova senha<input name="newPassword" type="password" autocomplete="new-password" minlength="8" maxlength="128" required></label>
+      <label>Confirme a nova senha<input name="confirmPassword" type="password" autocomplete="new-password" minlength="8" required></label>
+      <p id="passwordError" class="form-error" role="alert"></p>
+      <div class="form-actions"><button id="cancelPassword" type="button">Cancelar</button><button class="primary" type="submit">Salvar nova senha</button></div>
+    </form>
+  </dialog>
   <script src="config.js"></script>
+  <script src="vendor/tom-select.complete.min.js"></script>
+  <script src="vendor/flatpickr.min.js"></script>
+  <script src="vendor/flatpickr-pt.js"></script>
+  <script src="controls.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
-

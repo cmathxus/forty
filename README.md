@@ -1,124 +1,49 @@
-# Forty
+# FORTY
 
-MVP em .NET para acelerar pedidos, vales, cargas e entregas de uma distribuidora.
+Sistema de gestão operacional para distribuidoras. API ASP.NET Core 8, PostgreSQL/EF Core 8 e interface em HTML, CSS e JavaScript.
 
-## O que esta implementado
+## Funcionalidades
 
-- Interface web simples em `/` para demonstrar o fluxo.
-- Cadastro de regioes, vendedores, clientes, produtos e veiculos.
-- Produto com dados comerciais e campos fiscais base para futura NF-e.
-- Criacao de pedido usando codigo do produto e quantidade.
-- Preco, descricao, unidade, peso e totais preenchidos pelo cadastro do produto.
-- Marcacao de pedido como vale interno ou pedido com NF-e solicitada.
-- Vendedor padrao herdado do cliente, com opcao de trocar no pedido.
-- Programacao de carga por data, regiao, veiculo, placa/modelo e motorista.
-- Inclusao de pedidos confirmados dentro da carga.
-- Baixa da entrega com status, forma de pagamento, valor recebido e observacao.
-- Resumo da carga com total, recebido, pendentes, entregues e retornados.
-- Persistencia PostgreSQL com Entity Framework Core.
-- Testes do fluxo principal do pedido.
+- Login com e-mail e senha, sem confirmação de e-mail; sessão de oito horas e troca de senha.
+- Dashboard, cadastros, pedidos/executados, cargas, baixa de entregas e contas a pagar/receber.
+- Importação de clientes/produtos por planilha e relatórios com impressão do navegador.
+- Executado é um documento operacional; a marcação de NF-e não realiza emissão fiscal.
 
-## Requisitos
+## Desenvolvimento local
 
-- .NET SDK 9
-- Docker Desktop ou PostgreSQL 17 local
+Requer SDK e runtime ASP.NET Core 8 e Node.js para os testes do frontend. Docker é opcional; pode ser usado PostgreSQL externo/Supabase.
 
-## Executar localmente
+1. Restaure e compile: `dotnet tool restore` e `dotnet build DudaErp.sln -c Release`.
+2. Configure `ConnectionStrings:Postgres`, `Authentication:AdminEmail` e `Authentication:AdminPassword` em user-secrets do projeto ou variáveis de ambiente (com `__` no lugar de `:`). Nunca grave credenciais no repositório.
+3. Execute `dotnet run --project src/DudaErp.Api --launch-profile http`.
+4. Acesse [FORTY local](http://localhost:5161).
 
-```powershell
-$env:DOCKER_API_VERSION = "1.50"
-docker compose up -d
-dotnet tool restore
-dotnet ef database update --project src/DudaErp.Api
-dotnet run --project src/DudaErp.Api
-```
+Nesta máquina, `scripts/start-local.ps1` compila e inicia usando o runtime 8 instalado no diretório local do usuário. Ele usa os mesmos user-secrets e não inicia Docker.
 
-O Docker publica o Postgres na porta `55432` para evitar conflito com Postgres local na porta `5432`.
-Nesta maquina, o Docker Desktop respondeu corretamente usando `DOCKER_API_VERSION=1.50`.
+A conexão Npgsql usa o formato `Host=HOST;Port=5432;Database=postgres;Username=USUARIO;Password=SENHA;SSL Mode=Require;Search Path=forty`. A URI PostgreSQL precisa ser convertida para esse formato. Use a porta de session pooling do Supabase.
 
-Acesse a tela em `https://localhost:7295` ou `http://localhost:5161`.
+Com `Search Path=forty`, o startup cria esse schema e mantém seu histórico de migrations nele. As tabelas de outros schemas não são apagadas. Sem essa opção, mantém o comportamento anterior de usar o schema padrão. Migrations são aplicadas automaticamente ao iniciar: confira o banco configurado antes de executar.
 
-A documentacao OpenAPI fica disponivel em `/openapi/v1.json` no ambiente de desenvolvimento. A saude da API pode ser consultada em `/health`.
+O administrador é criado somente se o e-mail configurado ainda não existir; reiniciar não redefine sua senha. A senha fica armazenada com hash PBKDF2. A troca de senha invalida sessões anteriores. Não há cadastro público nem envio de e-mail. A interface mantém o token apenas na sessão da aba; sair limpa a sessão local.
 
-Para carregar dados iniciais de demonstracao, clique em `Carregar exemplo` na tela ou chame:
+Em localhost/127.0.0.1, o frontend usa a mesma origem da API. A URL remota em `wwwroot/config.js` permanece para o frontend publicado. O usuário de teste desta instalação foi configurado somente em user-secrets.
 
-```powershell
-Invoke-RestMethod -Method Post http://localhost:5161/api/demo/seed
-```
+## Validação
 
-## Testes
+- `node --check src/DudaErp.Api/wwwroot/app.js`
+- `node --test tests/frontend.test.mjs`
+- `dotnet test DudaErp.sln -c Release`
 
-```powershell
-dotnet test DudaErp.sln
-```
+O teste PostgreSQL exige `FORTY_TEST_CONNECTION` apontando para um banco de teste já migrado. Ele executa dentro de uma transação e reverte seus próprios dados; sem a variável, aparece como ignorado. Não use banco de produção.
 
-## Deploy rápido: front no GitHub Pages e back no Railway
+Os testes HTTP em `tests/auth.test.mjs` exigem `FORTY_TEST_BASE_URL`, `FORTY_TEST_EMAIL` e `FORTY_TEST_PASSWORD`, com a API em execução. Rode `node --test tests/auth.test.mjs`. Sem configuração, aparecem como ignorados.
 
-### Frontend no GitHub Pages
+## Segurança e operação
 
-O workflow `.github/workflows/pages.yml` publica automaticamente o conteúdo de:
+Todos os controllers exigem autenticação. Login, arquivos estáticos e `/health` são públicos. O login limita tentativas por IP. CORS permite GitHub Pages e as origens locais padrão; ajuste `Cors:AllowedOrigins` para outras origens. Não há endpoint público de registro de usuários.
 
-```txt
-src/DudaErp.Api/wwwroot
-```
+As chaves de ASP.NET Data Protection protegem os tokens. Em produção, preserve o diretório de chaves da conta do serviço entre deploys e compartilhe-o se houver múltiplas instâncias. Não use a senha de teste em uma implantação real.
 
-Depois do primeiro push para a branch `main`, vá no GitHub:
+O workflow do GitHub Pages publica o frontend em pushes na main. O backend histórico usa systemd/Caddy. Esta revisão não faz deploy nem troca a configuração remota para o novo banco.
 
-```txt
-Settings > Pages > Build and deployment > Source: GitHub Actions
-```
-
-O front deve ficar em:
-
-```txt
-https://cmathxus.github.io/forty/
-```
-
-Quando o backend estiver no Railway, edite:
-
-```txt
-src/DudaErp.Api/wwwroot/config.js
-```
-
-E coloque a URL do Railway:
-
-```js
-window.FORTY_CONFIG = {
-  apiBaseUrl: "https://sua-url-do-railway.up.railway.app"
-};
-```
-
-### Backend no Railway
-
-No Railway:
-
-1. Crie um projeto pelo GitHub Repository.
-2. Selecione `cmathxus/forty`.
-3. Adicione um serviço PostgreSQL.
-4. No serviço da API, configure a variável:
-
-```txt
-ConnectionStrings__Postgres=Host=...;Port=...;Database=...;Username=...;Password=...
-```
-
-O backend lê a variável `PORT` do Railway automaticamente e aplica migrations no banco ao iniciar.
-
-## Importar planilhas
-
-Depois de subir a API, importe os arquivos enviados pela cliente:
-
-```powershell
-curl.exe -X POST http://localhost:5161/api/import/customers -F "file=@C:\Users\akirasz\Downloads\clientes_organizados.xlsx"
-curl.exe -X POST http://localhost:5161/api/import/products -F "file=@C:\Users\akirasz\Downloads\Tabela_Geral_Completa_OMIE_BlocoK_CORRETO.xlsx"
-```
-
-Clientes sem regiao/vendedor na planilha entram com regiao `Importado` e vendedor `DIRETO`.
-Produtos usam `preco_caixa` como preco do pedido, porque o fluxo atual vende por caixa/fardo no vale.
-
-## Proximas etapas
-
-1. Autenticacao e perfis de usuario.
-2. Impressao do vale em PDF com layout parecido com o papel atual.
-3. Relatorio de acerto por vendedor, carga e banco.
-4. Importacao da planilha atual de clientes/produtos/pedidos.
-5. Integracao de NF-e via API fiscal, depois de validar dados com o contador.
+Veja [a revisão técnica](docs/REVISAO.md) para decisões, limites e próximos passos.

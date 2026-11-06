@@ -54,6 +54,23 @@ public sealed class OrdersController(AppDbContext dbContext, OrderService orderS
             .Take(100)
             .ToListAsync(cancellationToken);
 
+    [HttpGet("page")]
+    public async Task<IActionResult> GetPage(CancellationToken cancellationToken,
+        int page = 1, int pageSize = 100, OrderStatus? status = null)
+    {
+        if (page < 1 || pageSize is < 1 or > 200 || page > 1000000)
+            return BadRequest(new { detail = "Página inválida. Use de 1 a 200 pedidos por página." });
+
+        var query = dbContext.Orders.AsNoTracking();
+        if (status is not null) query = query.Where(x => x.Status == status);
+        var total = await query.CountAsync(cancellationToken);
+        var items = await query.Include(x => x.Customer).ThenInclude(x => x!.Region)
+            .Include(x => x.Seller).Include(x => x.Items)
+            .AsSplitQuery().OrderByDescending(x => x.Number)
+            .Skip((page - 1) * pageSize).Take(pageSize).ToListAsync(cancellationToken);
+        return Ok(new { items, total, page, pageSize });
+    }
+
     [HttpPut("{id:guid}")]
     public async Task<ActionResult<Order>> Update(Guid id, CreateOrderRequest request, CancellationToken cancellationToken)
     {
@@ -80,6 +97,12 @@ public sealed class OrdersController(AppDbContext dbContext, OrderService orderS
             .Include(x => x.Items)
             .SingleOrDefaultAsync(x => x.Id == id, cancellationToken);
         if (order is null) return NotFound();
+
+        if (order.Status != OrderStatus.Confirmed ||
+            await dbContext.DeliveryLoadOrders.AnyAsync(x => x.OrderId == id, cancellationToken))
+            return Conflict(new { detail = "Somente pedidos confirmados e sem carga podem ser excluídos." });
+        if (await dbContext.AccountsReceivable.AnyAsync(x => x.OrderNumber == order.Number, cancellationToken))
+            return Conflict(new { detail = "Este pedido possui lançamento financeiro e não pode ser excluído." });
 
         var loadLinks = await dbContext.DeliveryLoadOrders
             .Where(x => x.OrderId == id)

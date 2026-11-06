@@ -5,6 +5,7 @@ namespace DudaErp.Api.Data;
 
 public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(options)
 {
+    public DbSet<AppUser> Users => Set<AppUser>();
     public DbSet<Region> Regions => Set<Region>();
     public DbSet<Seller> Sellers => Set<Seller>();
     public DbSet<Customer> Customers => Set<Customer>();
@@ -19,6 +20,9 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        modelBuilder.Entity<AppUser>().HasIndex(x => x.Email).IsUnique();
+        modelBuilder.Entity<AppUser>().Property(x => x.Email).HasMaxLength(254);
+        modelBuilder.Entity<AppUser>().Property(x => x.Name).HasMaxLength(150);
         modelBuilder.Entity<Region>().HasIndex(x => x.Name).IsUnique();
         modelBuilder.Entity<Seller>().HasIndex(x => x.Code).IsUnique();
         modelBuilder.Entity<Customer>().HasIndex(x => x.TaxId).IsUnique();

@@ -13,6 +13,10 @@ public sealed class DeliveryLoadsController(AppDbContext dbContext) : Controller
     [HttpPost]
     public async Task<ActionResult<DeliveryLoad>> Create(CreateDeliveryLoadRequest request, CancellationToken cancellationToken)
     {
+        await using var numberingTransaction = dbContext.Database.IsNpgsql() && dbContext.Database.CurrentTransaction is null
+            ? await dbContext.Database.BeginTransactionAsync(cancellationToken) : null;
+        if (dbContext.Database.IsNpgsql())
+            await dbContext.Database.ExecuteSqlRawAsync("SELECT pg_advisory_xact_lock(40670, 2)", cancellationToken);
         if (!await dbContext.Regions.AnyAsync(x => x.Id == request.RegionId && x.IsActive, cancellationToken))
             return BadRequest(new ValidationProblemDetails(new Dictionary<string, string[]> { ["regionId"] = ["Regiao invalida ou inativa."] }));
 
@@ -31,13 +35,14 @@ public sealed class DeliveryLoadsController(AppDbContext dbContext) : Controller
         };
 
         dbContext.DeliveryLoads.Add(load);
-        await dbContext.SaveChangesAsync(cancellationToken);
 
         if (request.OrderIds is { Count: > 0 })
         {
             await AddOrdersAsync(load, request.OrderIds, cancellationToken);
-            await dbContext.SaveChangesAsync(cancellationToken);
         }
+
+        await dbContext.SaveChangesAsync(cancellationToken);
+        if (numberingTransaction is not null) await numberingTransaction.CommitAsync(cancellationToken);
 
         return CreatedAtAction(nameof(GetById), new { id = load.Id }, await LoadById(load.Id, cancellationToken));
     }
@@ -50,6 +55,7 @@ public sealed class DeliveryLoadsController(AppDbContext dbContext) : Controller
             .Include(x => x.Vehicle)
             .Include(x => x.Orders).ThenInclude(x => x.Order).ThenInclude(x => x!.Customer)
             .Include(x => x.Orders).ThenInclude(x => x.Order).ThenInclude(x => x!.Items)
+            .AsSplitQuery()
             .AsQueryable();
 
         if (date is not null)
@@ -78,6 +84,8 @@ public sealed class DeliveryLoadsController(AppDbContext dbContext) : Controller
 
         try
         {
+            if (load.Status != LoadStatus.Open)
+                return Conflict(new { detail = "Somente cargas abertas podem receber pedidos." });
             await AddOrdersAsync(load, request.OrderIds, cancellationToken);
             await dbContext.SaveChangesAsync(cancellationToken);
         }
@@ -93,9 +101,12 @@ public sealed class DeliveryLoadsController(AppDbContext dbContext) : Controller
     public async Task<ActionResult<DeliveryLoad>> Update(Guid id, UpdateDeliveryLoadRequest request, CancellationToken cancellationToken)
     {
         var load = await dbContext.DeliveryLoads
-            .Include(x => x.Orders)
+            .Include(x => x.Orders).ThenInclude(x => x.Order)
             .SingleOrDefaultAsync(x => x.Id == id, cancellationToken);
         if (load is null) return NotFound();
+
+        if (load.Status != LoadStatus.Open || load.Orders.Any(x => x.DeliveryStatus != DeliveryStatus.Pending))
+            return Conflict(new { detail = "Cargas com saída ou baixa registrada não podem ser editadas." });
 
         if (!await dbContext.Regions.AnyAsync(x => x.Id == request.RegionId && x.IsActive, cancellationToken))
             return BadRequest(new ValidationProblemDetails(new Dictionary<string, string[]> { ["regionId"] = ["Regiao invalida ou inativa."] }));
@@ -104,16 +115,19 @@ public sealed class DeliveryLoadsController(AppDbContext dbContext) : Controller
             !await dbContext.Vehicles.AnyAsync(x => x.Id == request.VehicleId && x.IsActive, cancellationToken))
             return BadRequest(new ValidationProblemDetails(new Dictionary<string, string[]> { ["vehicleId"] = ["Veiculo invalido ou inativo."] }));
 
-        foreach (var item in load.Orders)
+        var selectedIds = request.OrderIds?.Distinct().ToArray() ?? [];
+        var retainedIds = load.Orders.Where(x => selectedIds.Contains(x.OrderId)).Select(x => x.OrderId).ToArray();
+        var removedLinks = load.Orders.Where(x => !selectedIds.Contains(x.OrderId)).ToArray();
+        foreach (var item in removedLinks)
         {
-            var order = await dbContext.Orders.SingleAsync(x => x.Id == item.OrderId, cancellationToken);
+            var order = item.Order!;
             if (order.Status is OrderStatus.Scheduled)
             {
                 order.Status = OrderStatus.Confirmed;
             }
         }
 
-        dbContext.DeliveryLoadOrders.RemoveRange(load.Orders);
+        dbContext.DeliveryLoadOrders.RemoveRange(removedLinks);
         load.ScheduledDate = request.ScheduledDate;
         load.RegionId = request.RegionId;
         load.VehicleId = request.VehicleId;
@@ -122,10 +136,15 @@ public sealed class DeliveryLoadsController(AppDbContext dbContext) : Controller
         load.Status = LoadStatus.Open;
         load.UpdatedAt = DateTimeOffset.UtcNow;
 
-        if (request.OrderIds is { Count: > 0 })
+        var addedIds = selectedIds.Except(retainedIds).ToArray();
+        if (addedIds.Length > 0)
         {
-            await AddOrdersAsync(load, request.OrderIds, cancellationToken, load.Id);
+            await AddOrdersAsync(load, addedIds, cancellationToken, load.Id);
         }
+
+        if (retainedIds.Length > 0 && await dbContext.Orders.Include(x => x.Customer)
+            .AnyAsync(x => retainedIds.Contains(x.Id) && x.Customer!.RegionId != load.RegionId, cancellationToken))
+            return BadRequest(new { detail = "Os pedidos selecionados devem pertencer à região da carga." });
 
         await dbContext.SaveChangesAsync(cancellationToken);
         return Ok(await LoadById(id, cancellationToken));
@@ -135,13 +154,16 @@ public sealed class DeliveryLoadsController(AppDbContext dbContext) : Controller
     public async Task<IActionResult> Delete(Guid id, CancellationToken cancellationToken)
     {
         var load = await dbContext.DeliveryLoads
-            .Include(x => x.Orders)
+            .Include(x => x.Orders).ThenInclude(x => x.Order)
             .SingleOrDefaultAsync(x => x.Id == id, cancellationToken);
         if (load is null) return NotFound();
 
+        if (load.Status != LoadStatus.Open || load.Orders.Any(x => x.DeliveryStatus != DeliveryStatus.Pending))
+            return Conflict(new { detail = "Cargas com saída ou baixa registrada não podem ser excluídas." });
+
         foreach (var item in load.Orders)
         {
-            var order = await dbContext.Orders.SingleAsync(x => x.Id == item.OrderId, cancellationToken);
+            var order = item.Order!;
             if (order.Status is OrderStatus.Scheduled)
             {
                 order.Status = OrderStatus.Confirmed;
@@ -164,6 +186,17 @@ public sealed class DeliveryLoadsController(AppDbContext dbContext) : Controller
         {
             return NotFound();
         }
+
+        var deliveryLoad = await dbContext.DeliveryLoads.SingleAsync(x => x.Id == loadId, cancellationToken);
+        if (deliveryLoad.Status != LoadStatus.Dispatched || loadOrder.DeliveryStatus != DeliveryStatus.Pending)
+            return Conflict(new { detail = "A baixa exige uma carga na rua e um pedido ainda pendente." });
+        if (!Enum.IsDefined(request.DeliveryStatus) || request.DeliveryStatus == DeliveryStatus.Pending ||
+            !Enum.IsDefined(request.PaymentMethod))
+            return BadRequest(new { detail = "Informe uma situação de entrega e uma forma de pagamento válidas." });
+        if (request.AmountReceived < 0 || request.AmountReceived > loadOrder.Order!.TotalAmount ||
+            (request.DeliveryStatus is DeliveryStatus.Returned or DeliveryStatus.Refused && request.AmountReceived > 0) ||
+            (request.AmountReceived > 0 && request.PaymentMethod == PaymentMethod.None))
+            return BadRequest(new { detail = "Revise o valor recebido e a forma de pagamento." });
 
         loadOrder.DeliveryStatus = request.DeliveryStatus;
         loadOrder.PaymentMethod = request.PaymentMethod;
@@ -204,6 +237,10 @@ public sealed class DeliveryLoadsController(AppDbContext dbContext) : Controller
         {
             return NotFound();
         }
+
+        if (load.Status != LoadStatus.Open || load.Orders.Count == 0 ||
+            load.Orders.Any(x => x.DeliveryStatus != DeliveryStatus.Pending))
+            return Conflict(new { detail = "Somente uma carga aberta, com pedidos pendentes, pode sair para entrega." });
 
         load.Status = LoadStatus.Dispatched;
         foreach (var item in load.Orders)
@@ -264,6 +301,8 @@ public sealed class DeliveryLoadsController(AppDbContext dbContext) : Controller
 
         foreach (var order in orders)
         {
+            if (order.Status != OrderStatus.Confirmed)
+                throw new InvalidOperationException($"Pedido {order.Number} não está confirmado para inclusão em carga.");
             if (order.Customer!.RegionId != load.RegionId)
             {
                 throw new InvalidOperationException($"Pedido {order.Number} nao pertence a regiao da carga.");

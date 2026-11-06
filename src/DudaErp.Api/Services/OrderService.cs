@@ -9,6 +9,11 @@ public sealed class OrderService(AppDbContext dbContext)
 {
     public async Task<Order> CreateAsync(CreateOrderRequest request, CancellationToken cancellationToken)
     {
+        ValidateItems(request);
+        await using var numberingTransaction = dbContext.Database.IsNpgsql() && dbContext.Database.CurrentTransaction is null
+            ? await dbContext.Database.BeginTransactionAsync(cancellationToken) : null;
+        if (dbContext.Database.IsNpgsql())
+            await dbContext.Database.ExecuteSqlRawAsync("SELECT pg_advisory_xact_lock(40670, 1)", cancellationToken);
         var customer = await dbContext.Customers
             .AsNoTracking()
             .SingleOrDefaultAsync(x => x.Id == request.CustomerId && x.IsActive, cancellationToken)
@@ -70,14 +75,24 @@ public sealed class OrderService(AppDbContext dbContext)
 
         dbContext.Orders.Add(order);
         await dbContext.SaveChangesAsync(cancellationToken);
+        if (numberingTransaction is not null) await numberingTransaction.CommitAsync(cancellationToken);
         return order;
     }
 
     public async Task<Order> UpdateAsync(Guid id, CreateOrderRequest request, CancellationToken cancellationToken)
     {
+        ValidateItems(request);
         var order = await dbContext.Orders
+            .Include(x => x.Items)
             .SingleOrDefaultAsync(x => x.Id == id, cancellationToken)
             ?? throw new InvalidOperationException("Pedido não encontrado.");
+
+        if (order.Status != OrderStatus.Confirmed ||
+            await dbContext.DeliveryLoadOrders.AnyAsync(x => x.OrderId == id, cancellationToken))
+            throw new InvalidOperationException("Somente pedidos confirmados e sem carga podem ser editados. Remova o pedido de uma carga aberta antes de editar.");
+
+        if (await dbContext.AccountsReceivable.AnyAsync(x => x.OrderNumber == order.Number, cancellationToken))
+            throw new InvalidOperationException("Este pedido possui lançamento financeiro. Revise o financeiro antes de editar.");
 
         var customer = await dbContext.Customers
             .AsNoTracking()
@@ -104,13 +119,9 @@ public sealed class OrderService(AppDbContext dbContext)
             throw new InvalidOperationException($"Produtos não encontrados ou inativos: {string.Join(", ", missingCodes)}.");
         }
 
-        await dbContext.DeliveryLoadOrders
-            .Where(x => x.OrderId == id)
-            .ExecuteDeleteAsync(cancellationToken);
-
-        await dbContext.OrderItems
-            .Where(x => x.OrderId == id)
-            .ExecuteDeleteAsync(cancellationToken);
+        // Um único SaveChanges mantém substituição de itens e cabeçalho na mesma transação.
+        dbContext.OrderItems.RemoveRange(order.Items);
+        order.Items.Clear();
 
         order.CustomerId = customer.Id;
         order.SellerId = sellerId;
@@ -156,6 +167,10 @@ public sealed class OrderService(AppDbContext dbContext)
 
     private static (decimal UnitPrice, decimal TotalAmount) ResolvePricing(Product product, CreateOrderItemRequest item)
     {
+        if (item.Quantity <= 0 || decimal.Round(item.Quantity, 3) != item.Quantity)
+            throw new InvalidOperationException("Informe uma quantidade positiva com até três casas decimais.");
+        if (item.UnitPrice is <= 0 || item.TotalAmount is <= 0)
+            throw new InvalidOperationException("Preço e total do item devem ser positivos.");
         var totalAmount = item.TotalAmount is > 0
             ? decimal.Round(item.TotalAmount.Value, 2)
             : (decimal?)null;
@@ -167,6 +182,18 @@ public sealed class OrderService(AppDbContext dbContext)
                 : decimal.Round(product.SalePrice, 2);
 
         totalAmount ??= decimal.Round(unitPrice * item.Quantity, 2);
+        if (totalAmount <= 0 || unitPrice <= 0)
+            throw new InvalidOperationException("Preço e total do item devem ser maiores que zero após arredondamento.");
+        if (item.UnitPrice.HasValue && item.TotalAmount.HasValue &&
+            decimal.Abs(totalAmount.Value - decimal.Round(unitPrice * item.Quantity, 2)) > 0.01m &&
+            decimal.Round(totalAmount.Value / item.Quantity, 2) != unitPrice)
+            throw new InvalidOperationException("O preço, a quantidade e o total do item estão inconsistentes. Revise os valores.");
         return (unitPrice, totalAmount.Value);
+    }
+
+    private static void ValidateItems(CreateOrderRequest request)
+    {
+        if (request.Items is null || request.Items.Count == 0 || request.Items.Any(x => string.IsNullOrWhiteSpace(x.ProductCode)))
+            throw new InvalidOperationException("Informe pelo menos um item com código de produto válido.");
     }
 }

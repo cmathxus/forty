@@ -10,6 +10,10 @@ const state = {
   receivables: [],
   editing: {}
 };
+let visibleOrders = 40;
+let refreshPromise = null;
+let toastTimer;
+let accessToken = sessionStorage.getItem("forty.accessToken") || "";
 
 const editModal = {
   form: null,
@@ -47,6 +51,7 @@ const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
 const money = value => Number(value || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 const dateBR = value => value ? new Date(`${value}T00:00:00`).toLocaleDateString("pt-BR") : "-";
 const dateTimeToDateOnly = value => value ? new Date(value).toISOString().slice(0, 10) : null;
+const localDateOnly = date => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 const normalize = value => String(value ?? "").toLowerCase();
 const apiBaseUrl = String(window.FORTY_CONFIG?.apiBaseUrl ?? "").replace(/\/$/, "");
 
@@ -58,16 +63,25 @@ function toast(message) {
   const el = $("#toast");
   el.textContent = message;
   el.style.display = "block";
-  setTimeout(() => el.style.display = "none", 3200);
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.style.display = "none", 6500);
 }
 
 async function api(path, options = {}) {
-  const response = await fetch(apiUrl(path), {
-    headers: { "Content-Type": "application/json", ...(options.headers ?? {}) },
-    ...options
+  let response;
+  try {
+    response = await fetch(apiUrl(path), {
+    signal: AbortSignal.timeout(30000),
+    ...options,
+    headers: { "Content-Type": "application/json", ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}), ...(options.headers ?? {}) },
   });
+  } catch {
+    throw new Error("Não foi possível conectar ao servidor. Verifique sua conexão e tente novamente.");
+  }
 
   if (!response.ok) {
+    if (response.status === 401 && path !== "/api/auth/login") showLogin("Sua sessão expirou. Entre novamente.");
+    if (response.status === 429) throw new Error("Muitas tentativas de acesso. Aguarde um minuto e tente novamente.");
     const text = await response.text();
     throw new Error(errorMessage(text) || `Erro ${response.status}`);
   }
@@ -83,9 +97,9 @@ function errorMessage(text) {
     if (data.errors) {
       return Object.values(data.errors).flat().join(" ");
     }
-    return data.title || data.detail || text;
+    return data.detail || data.title || "Não foi possível concluir a operação.";
   } catch {
-    return text;
+    return "O servidor não conseguiu concluir a operação. Tente novamente.";
   }
 }
 
@@ -100,7 +114,7 @@ function formJson(form) {
 function fillSelect(selector, rows, label, includeEmpty = false) {
   $$(selector).forEach(select => {
     const selected = select.value;
-    select.innerHTML = includeEmpty ? "<option value=\"\">Padrao</option>" : "";
+    select.innerHTML = includeEmpty ? "<option value=\"\">Padrão</option>" : "";
     for (const row of rows) {
       const option = document.createElement("option");
       option.value = row.id;
@@ -110,6 +124,7 @@ function fillSelect(selector, rows, label, includeEmpty = false) {
     if ([...select.options].some(option => option.value === selected)) {
       select.value = selected;
     }
+    window.FortyControls?.syncSelect(select);
   });
 }
 
@@ -126,11 +141,11 @@ function filteredCustomersForOrder() {
   const raw = normalize($("#customerSearch")?.value || "");
   const digits = raw.replace(/\D/g, "");
 
-  if (!raw) return state.customers.slice(0, 40);
+  if (!raw) return state.customers;
 
   return state.customers
-    .filter(customer => normalize(customer.legalName).includes(raw) || customer.taxId.includes(digits))
-    .slice(0, 40);
+    .filter(customer => normalize(customer.legalName).includes(raw) ||
+      normalize(customer.tradeName).includes(raw) || (digits.length > 0 && customer.taxId.replace(/\D/g, "").includes(digits)));
 }
 
 function fillCustomerSelect() {
@@ -176,13 +191,21 @@ async function refreshCatalog() {
   fillSelect("select[name='vehicleId']", vehicles.filter(x => x.isActive), x => `${x.name} - ${x.plate}`, true);
   fillSelect("#receivableForm select[name='customerId']", customers.filter(x => x.isActive), x => x.legalName, true);
   fillCustomerSelect();
+  $$('select').forEach(select => window.FortyControls?.syncSelect(select));
   refreshProductHints();
   renderMetrics();
   renderCatalogLists();
 }
 
 async function refreshOrders() {
-  state.orders = await api("/api/orders");
+  const orders = [];
+  let page = 1;
+  let result;
+  do {
+    result = await api(`/api/orders/page?page=${page++}&pageSize=200`);
+    orders.push(...result.items);
+  } while (result.items.length > 0 && orders.length < result.total);
+  state.orders = orders;
   renderOrders();
   renderLoadOrderChoices();
   renderMetrics();
@@ -230,9 +253,9 @@ function renderCustomersList() {
   $("#customersCount").textContent = `${rows.length} de ${state.customers.filter(x => x.isActive).length}`;
   $("#customersList").innerHTML = rows.map(customer => `
     <div class="mini-card">
-      <strong>${customer.legalName}</strong>
-      <div class="meta">CNPJ ${customer.taxId} | ${customer.city} - ${customer.state}</div>
-      <div class="meta">${customer.street}, ${customer.number} | ${customer.phone || "sem telefone"}</div>
+      <strong>${escapeHtml(customer.legalName)}</strong>
+      <div class="meta">CNPJ ${escapeHtml(customer.taxId)} | ${escapeHtml(customer.city)} - ${escapeHtml(customer.state)}</div>
+      <div class="meta">${escapeHtml(customer.street)}, ${escapeHtml(customer.number)} | ${escapeHtml(customer.phone || "sem telefone")}</div>
       <div class="card-actions">
         <button type="button" data-edit-customer="${customer.id}">Editar</button>
         <button type="button" data-delete-customer="${customer.id}">Excluir</button>
@@ -257,9 +280,9 @@ function renderProductsList() {
   $("#productsCount").textContent = `${rows.length} de ${state.products.filter(x => x.isActive).length}`;
   $("#productsList").innerHTML = rows.map(product => `
     <div class="mini-card">
-      <strong>${product.code} - ${product.name}</strong>
-      <div class="meta">${money(product.salePrice)} por ${product.unit} | Unitario ${money(product.unitSalePrice)}</div>
-      <div class="meta">NCM ${product.ncm || "-"} | CEST ${product.cest || "-"} | DUN ${product.boxBarcode || "-"}</div>
+      <strong>${escapeHtml(product.code)} - ${escapeHtml(product.name)}</strong>
+      <div class="meta">${money(product.salePrice)} por ${escapeHtml(product.unit)} | Unitário ${money(product.unitSalePrice)}</div>
+      <div class="meta">NCM ${escapeHtml(product.ncm || "-")} | CEST ${escapeHtml(product.cest || "-")} | DUN ${escapeHtml(product.boxBarcode || "-")}</div>
       <div class="card-actions">
         <button type="button" data-edit-product="${product.id}">Editar</button>
         <button type="button" data-delete-product="${product.id}">Excluir</button>
@@ -274,9 +297,9 @@ function renderSellersList() {
   $("#sellersCount").textContent = `${rows.length} de ${state.sellers.filter(x => x.isActive).length}`;
   $("#sellersList").innerHTML = rows.map(seller => `
     <div class="mini-card">
-      <strong>${seller.code} - ${seller.name}</strong>
+      <strong>${escapeHtml(seller.code)} - ${escapeHtml(seller.name)}</strong>
       <div class="meta">Comissão padrão: ${seller.defaultCommissionPercentage ?? 0}%</div>
-      <div class="meta">${seller.email || "sem email"} | ${seller.phone || "sem telefone"}</div>
+      <div class="meta">${escapeHtml(seller.email || "sem email")} | ${escapeHtml(seller.phone || "sem telefone")}</div>
       <div class="card-actions">
         <button type="button" data-edit-seller="${seller.id}">Editar</button>
         <button type="button" data-delete-seller="${seller.id}">Excluir</button>
@@ -291,7 +314,7 @@ function renderRegionsList() {
   $("#regionsCount").textContent = `${rows.length} de ${state.regions.filter(x => x.isActive).length}`;
   $("#regionsList").innerHTML = rows.map(region => `
     <div class="mini-card">
-      <strong>${region.name}</strong>
+      <strong>${escapeHtml(region.name)}</strong>
       <div class="meta">${region.isActive ? "Ativa" : "Inativa"}</div>
       <div class="card-actions">
         <button type="button" data-edit-region="${region.id}">Editar</button>
@@ -307,8 +330,8 @@ function renderVehiclesList() {
   $("#vehiclesCount").textContent = `${rows.length} de ${state.vehicles.filter(x => x.isActive).length}`;
   $("#vehiclesList").innerHTML = rows.map(vehicle => `
     <div class="mini-card">
-      <strong>${vehicle.name} - ${vehicle.plate}</strong>
-      <div class="meta">${vehicle.model || "Modelo não informado"} | ${vehicle.isActive ? "Ativo" : "Inativo"}</div>
+      <strong>${escapeHtml(vehicle.name)} - ${escapeHtml(vehicle.plate)}</strong>
+      <div class="meta">${escapeHtml(vehicle.model || "Modelo não informado")} | ${vehicle.isActive ? "Ativo" : "Inativo"}</div>
       <div class="card-actions">
         <button type="button" data-edit-vehicle="${vehicle.id}">Editar</button>
         <button type="button" data-delete-vehicle="${vehicle.id}">Excluir</button>
@@ -339,22 +362,25 @@ function statusBadge(status) {
 }
 
 function renderMetrics() {
-  const ordersTotal = state.orders.reduce((sum, order) => sum + Number(order.totalAmount || 0), 0);
-  const loadsOnStreet = state.loads.filter(load => load.status === "Dispatched").length;
-  const pendingOrders = state.orders.filter(order => order.status === "Confirmed").length;
-  const metrics = $("#metrics");
-
-  if (metrics) {
-    metrics.innerHTML = `
-      <div class="metric"><span>Clientes ativos</span><strong>${state.customers.filter(x => x.isActive).length}</strong></div>
-      <div class="metric"><span>Produtos ativos</span><strong>${state.products.filter(x => x.isActive).length}</strong></div>
-      <div class="metric"><span>Pedidos pendentes</span><strong>${pendingOrders}</strong></div>
-      <div class="metric"><span>Total dos pedidos</span><strong>${money(ordersTotal)}</strong></div>
-    `;
-  }
-
-  const loadMetric = loadsOnStreet ? `${loadsOnStreet} carga(s) na rua` : "Nenhuma carga na rua";
-  document.title = `Forty - ${loadMetric}`;
+  const pendingOrders = state.orders.filter(order => order.status === "Confirmed");
+  const openLoads = state.loads.filter(load => load.status === "Open");
+  const streetLoads = state.loads.filter(load => load.status === "Dispatched");
+  const receivableTotal = state.receivables.filter(item => item.status === "Open").reduce((sum, item) => sum + Number(item.amount || 0), 0);
+  const overdue = state.payables.filter(item => item.status === "Open" && daysUntil(item.dueDate) < 0).length;
+  $("#waitingOrderValue").textContent = money(pendingOrders.reduce((sum, order) => sum + Number(order.totalAmount || 0), 0));
+  $("#waitingOrderCount").textContent = pendingOrders.length === 1 ? "1 pedido confirmado" : `${pendingOrders.length} pedidos confirmados`;
+  $("#flowWaiting").textContent = pendingOrders.length;
+  $("#flowPreparing").textContent = openLoads.length;
+  $("#flowOnRoute").textContent = streetLoads.length;
+  $("#flowSummary").textContent = streetLoads.length ? `${streetLoads.length} ${streetLoads.length === 1 ? "carga" : "cargas"} em rota.` : "Nenhuma carga em rota.";
+  const summaries = [
+    ["Clientes ativos", state.customers.filter(x => x.isActive).length, '<circle cx="12" cy="8" r="3.5"></circle><path d="M5 21v-2a7 7 0 0 1 14 0v2"></path>'],
+    ["Produtos no catálogo", state.products.filter(x => x.isActive).length, '<path d="m12 3 9 5v9l-9 5-9-5V8zM3 8l9 5 9-5M12 13v9"></path>'],
+    ["Contas a receber abertas", money(receivableTotal), '<path d="M12 3v18M17 7H9a3 3 0 0 0 0 6h6a3 3 0 0 1 0 6H6"></path>'],
+    ["Contas a pagar vencidas", overdue, '<circle cx="12" cy="12" r="9"></circle><path d="M12 7v6l4 2"></path>']
+  ];
+  $("#metrics").innerHTML = summaries.map(([label, value, icon]) => `<div class="metric"><span class="metric-icon"><svg viewBox="0 0 24 24" aria-hidden="true">${icon}</svg></span><span class="metric-label">${label}</span><strong>${value}</strong></div>`).join("");
+  document.title = streetLoads.length ? `FORTY · ${streetLoads.length} carga(s) em rota` : "FORTY · Operação";
   renderDashboard();
 }
 
@@ -371,7 +397,13 @@ function renderDashboard() {
     .filter(item => item.days <= 7)
     .sort((a, b) => a.days - b.days);
 
+  const setupActions = [];
+  if (!state.regions.some(x => x.isActive)) setupActions.push({title:"Defina as regiões de entrega",meta:"Organize os destinos das suas cargas.",view:"regions"});
+  if (!state.sellers.some(x => x.isActive)) setupActions.push({title:"Cadastre os vendedores",meta:"Identifique os responsáveis pelos pedidos.",view:"sellers"});
+  if (!state.customers.some(x => x.isActive)) setupActions.push({title:"Adicione os clientes",meta:"Vincule cada cliente a uma região e vendedor.",view:"customers"});
+  if (!state.products.some(x => x.isActive)) setupActions.push({title:"Monte o catálogo de produtos",meta:"Cadastre códigos, preços e embalagens.",view:"products"});
   const actionRows = [
+    ...setupActions,
     ...pendingOrders.slice(0, 3).map(order => ({
       title: `Pedido ${order.number} aguardando carga`,
       meta: `${order.customer?.legalName ?? "Cliente"} · ${money(order.totalAmount)}`,
@@ -389,7 +421,7 @@ function renderDashboard() {
     }))
   ].slice(0, 6);
 
-  $("#dashboardActionCount").textContent = actionRows.length ? `${actionRows.length} item(s)` : "Tudo em ordem";
+  $("#dashboardActionCount").textContent = actionRows.length ? `${actionRows.length} ${actionRows.length === 1 ? "ação" : "ações"}` : "";
   actions.innerHTML = actionRows.map(item => `
     <button class="dashboard-row" type="button" data-view-shortcut="${item.view}">
       <span>
@@ -400,52 +432,57 @@ function renderDashboard() {
     </button>
   `).join("") || `
     <div class="empty-state">
-      <strong>Nada urgente agora</strong>
-      <span>Quando tiver pedido pendente, carga na rua ou conta vencendo, aparece aqui.</span>
+      <span>Nenhuma pendência no momento.</span>
     </div>
   `;
 
-  recent.innerHTML = state.orders.slice(0, 6).map(order => `
-    <button class="dashboard-row" type="button" data-view-shortcut="orders">
-      <span>
-        <strong>Pedido ${order.number} · ${money(order.totalAmount)}</strong>
-        <small>${escapeHtml(order.customer?.legalName ?? "Cliente")} · ${escapeHtml(order.seller?.name ?? "Vendedor")} · ${escapeHtml(order.status)}</small>
-      </span>
-      ${statusBadge(order.status)}
-    </button>
-  `).join("") || `
-    <div class="empty-state">
-      <strong>Nenhum pedido lançado</strong>
-      <span>Use “Novo pedido” para começar o fluxo.</span>
-    </div>
+  $("#dashboardOrderCount").textContent = `${state.orders.length} ${state.orders.length === 1 ? "pedido" : "pedidos"} no histórico`;
+  const hasCatalog = state.customers.some(x => x.isActive) && state.products.some(x => x.isActive);
+  const emptyOrders = `<tr><td colspan="4" class="table-empty"><div class="empty-order"><svg viewBox="0 0 80 62" aria-hidden="true"><path d="m19 17 21-11 21 11-21 12zM19 17v27l21 12 21-12V17M40 29v27"></path><path class="parcel-tape" d="m30 11 21 12v11M7 45h8M65 8h8"></path></svg><strong>Nenhum pedido cadastrado</strong><span>${hasCatalog ? "Clientes e catálogo prontos para lançar o primeiro pedido." : "Adicione clientes e produtos para começar a lançar pedidos."}</span><div class="empty-order-actions">${hasCatalog ? '<button class="text-button" type="button" data-create="order">Lançar primeiro pedido</button>' : '<button class="text-button" type="button" data-view-shortcut="customers">Cadastrar cliente</button><button class="text-button" type="button" data-view-shortcut="products">Cadastrar produto</button>'}</div></div></td></tr>`;
+  recent.innerHTML = `
+    <table class="dashboard-table">
+      <thead><tr><th scope="col">Pedido</th><th scope="col">Cliente</th><th scope="col" class="amount">Valor</th><th scope="col">Situação</th></tr></thead>
+      <tbody>
+        ${state.orders.slice(0, 8).map(order => `
+          <tr><td><button class="text-button" type="button" data-view-shortcut="orders">${order.number}</button></td><td>${escapeHtml(order.customer?.legalName ?? "Cliente")}</td><td class="amount">${money(order.totalAmount)}</td><td>${statusBadge(order.status)}</td></tr>
+        `).join("") || emptyOrders}
+      </tbody>
+    </table>
   `;
+
 }
 
 function renderOrders() {
   const list = $("#ordersList");
   list.innerHTML = "";
 
-  if (state.orders.length === 0) {
-    list.innerHTML = `<div class="card"><strong>Nenhum pedido ainda</strong><div class="meta">Crie um pedido para demonstrar o fluxo.</div></div>`;
+  const term = normalize($("#orderSearch")?.value).trim();
+  const status = $("#orderStatusFilter")?.value;
+  const filtered = state.orders.filter(order => (!status || order.status === status) &&
+    matches(order, term, [x => x.number, x => x.customer?.legalName, x => x.seller?.name]));
+  $("#orderCount").textContent = `${filtered.length} pedido(s)`;
+  $("#moreOrders").hidden = filtered.length <= visibleOrders;
+  if (filtered.length === 0) {
+    list.innerHTML = `<div class="card"><strong>Nenhum pedido encontrado</strong><div class="meta">Revise os filtros ou lance um novo pedido.</div></div>`;
     return;
   }
 
-  for (const order of state.orders) {
+  for (const order of filtered.slice(0, visibleOrders)) {
     const card = document.createElement("div");
     card.className = "card";
     card.innerHTML = `
       <div class="card-header">
         <div>
           <strong>Pedido ${order.number} - ${money(order.totalAmount)}</strong>
-          <div class="meta">${order.customer?.legalName ?? "Cliente"} | ${order.seller?.name ?? "Vendedor"}</div>
-          <div class="meta">${order.isFiscalInvoiceRequested ? "Pedido para NF-e" : "Executado"} | ${order.paymentCondition || "sem condição"} | Peso ${Number(order.totalWeightInKg || 0).toFixed(3)} kg</div>
+          <div class="meta">${escapeHtml(order.customer?.legalName ?? "Cliente")} | ${escapeHtml(order.seller?.name ?? "Vendedor")}</div>
+          <div class="meta">${order.isFiscalInvoiceRequested ? "Pedido para NF-e" : "Executado"} | ${escapeHtml(order.paymentCondition || "sem condição")} | Peso ${Number(order.totalWeightInKg || 0).toFixed(3)} kg</div>
         </div>
         ${statusBadge(order.status)}
       </div>
       <div class="card-actions">
         <button type="button" data-vale="${order.id}">Ver executado</button>
-        <button type="button" data-edit-order="${order.id}">Editar</button>
-        <button type="button" data-delete-order="${order.id}">Excluir</button>
+        <button type="button" data-edit-order="${order.id}" ${order.status !== "Confirmed" ? 'disabled title="Pedido vinculado à operação de entrega"' : ""}>Editar</button>
+        <button type="button" data-delete-order="${order.id}" ${order.status !== "Confirmed" ? "disabled" : ""}>Excluir</button>
       </div>
     `;
     list.append(card);
@@ -470,18 +507,18 @@ function renderLoads() {
     card.innerHTML = `
       <div class="card-header">
         <div>
-          <strong>Carga ${load.number} - ${load.region?.name ?? ""}</strong>
-          <div class="meta">${dateBR(load.scheduledDate)} | ${load.vehicle ? `${load.vehicle.name} - ${load.vehicle.plate}` : "Sem veículo"} | Motorista: ${load.driverName || "-"}</div>
+          <strong>Carga ${load.number} - ${escapeHtml(load.region?.name ?? "")}</strong>
+          <div class="meta">${dateBR(load.scheduledDate)} | ${escapeHtml(load.vehicle ? `${load.vehicle.name} - ${load.vehicle.plate}` : "Sem veículo")} | Motorista: ${escapeHtml(load.driverName || "-")}</div>
           <div class="meta">${load.orders.length} pedidos | Total ${money(total)} | Recebido ${money(received)}</div>
         </div>
         ${statusBadge(load.status)}
       </div>
       <div class="card-actions">
         ${load.status === "Open" ? `<button type="button" data-dispatch="${load.id}">Marcar saída pra rua</button>` : ""}
-        <button type="button" data-report-load="${load.id}">PDF da carga</button>
+        <button type="button" data-report-load="${load.id}">Relatório da carga</button>
         <button type="button" data-report-loading="${load.id}">Carregamento expedição</button>
-        <button type="button" data-edit-load="${load.id}">Editar</button>
-        <button type="button" data-delete-load="${load.id}">Excluir</button>
+        <button type="button" data-edit-load="${load.id}" ${load.status !== "Open" ? "disabled" : ""}>Editar</button>
+        <button type="button" data-delete-load="${load.id}" ${load.status !== "Open" ? "disabled" : ""}>Excluir</button>
       </div>
       <p class="delivery-help">Baixa da entrega: informe quanto recebeu em cada pedido e clique em Entregue ou Retornou.</p>
       <div class="order-lines">
@@ -500,10 +537,10 @@ function renderLoadOrder(load, item) {
     <div class="load-order" data-load-order="${load.id}:${order.id}">
       <div>
         <strong>Pedido ${order?.number ?? "-"} - ${money(order?.totalAmount)}</strong>
-        <div class="meta">${order?.customer?.legalName ?? "Cliente"} | ${statusBadge(item.deliveryStatus)}</div>
-        ${item.deliveryNotes ? `<div class="meta">Obs.: ${item.deliveryNotes}</div>` : ""}
+        <div class="meta">${escapeHtml(order?.customer?.legalName ?? "Cliente")} | ${statusBadge(item.deliveryStatus)}</div>
+        ${item.deliveryNotes ? `<div class="meta">Obs.: ${escapeHtml(item.deliveryNotes)}</div>` : ""}
       </div>
-      ${pending ? `
+      ${pending && load.status === "Dispatched" ? `
         <div class="delivery-close">
           <label>Recebido
             <input name="amountReceived" type="number" step="0.01" min="0" value="${Number(received).toFixed(2)}">
@@ -542,10 +579,13 @@ function renderLoadOrderChoices() {
   if (!container) return;
   const selectedRegionId = $("#loadForm select[name='regionId']")?.value;
   const editingLoad = state.loads.find(x => x.id === state.editing.load);
-  const selectedOrderIds = new Set(editingLoad?.orders.map(x => x.orderId) ?? []);
+  const selectedOrderIds = new Set($("#loadForm").dataset.dirty === "true"
+    ? $$("input:checked", container).map(x => x.value)
+    : editingLoad?.orders.map(x => x.orderId) ?? []);
+  const linkedOrderIds = new Set(editingLoad?.orders.map(x => x.orderId) ?? []);
   const available = state.orders.filter(order => {
     const sameRegion = !selectedRegionId || order.customer?.regionId === selectedRegionId;
-    const canUse = order.status === "Confirmed" || selectedOrderIds.has(order.id);
+    const canUse = order.status === "Confirmed" || linkedOrderIds.has(order.id);
     return sameRegion && canUse;
   });
   container.innerHTML = "";
@@ -559,7 +599,7 @@ function renderLoadOrderChoices() {
     const label = document.createElement("label");
     label.innerHTML = `
       <input type="checkbox" name="orderIds" value="${order.id}" ${selectedOrderIds.has(order.id) ? "checked" : ""}>
-      <span>Pedido ${order.number}<br><small>${order.customer?.legalName ?? "Cliente"} - ${order.customer?.region?.name ?? "sem região"} - ${money(order.totalAmount)}</small></span>
+      <span>Pedido ${order.number}<br><small>${escapeHtml(order.customer?.legalName ?? "Cliente")} - ${escapeHtml(order.customer?.region?.name ?? "sem região")} - ${money(order.totalAmount)}</small></span>
     `;
     container.append(label);
   }
@@ -582,16 +622,16 @@ function renderFinancial() {
     <div class="card">
       <div class="card-header">
         <div>
-          <strong>${item.description} - ${money(item.amount)}</strong>
-          <div class="meta">${item.supplierName || "Fornecedor não informado"} | vence ${dateBR(item.dueDate)}</div>
-          ${item.notes ? `<div class="meta">${item.notes}</div>` : ""}
+          <strong>${escapeHtml(item.description)} - ${money(item.amount)}</strong>
+          <div class="meta">${escapeHtml(item.supplierName || "Fornecedor não informado")} | vence ${dateBR(item.dueDate)}</div>
+          ${item.notes ? `<div class="meta">${escapeHtml(item.notes)}</div>` : ""}
         </div>
         ${financialStatusBadge(item.status)}
       </div>
       <div class="card-actions">
         ${item.status === "Open" ? `<button type="button" class="primary" data-pay-payable="${item.id}">Marcar pago</button>` : ""}
-        <button type="button" data-edit-payable="${item.id}">Editar</button>
-        <button type="button" data-delete-payable="${item.id}">Excluir</button>
+        <button type="button" data-edit-payable="${item.id}" ${item.status !== "Open" ? "disabled" : ""}>Editar</button>
+        <button type="button" data-delete-payable="${item.id}" ${item.status !== "Open" ? "disabled" : ""}>Excluir</button>
       </div>
     </div>
   `).join("") || `<div class="card"><strong>Nenhuma conta a pagar.</strong></div>`;
@@ -601,16 +641,16 @@ function renderFinancial() {
     <div class="card">
       <div class="card-header">
         <div>
-          <strong>${item.description} - ${money(item.amount)}</strong>
-          <div class="meta">${item.customer?.legalName || "Cliente não informado"} ${item.orderNumber ? `| Pedido ${item.orderNumber}` : ""} | vence ${dateBR(item.dueDate)}</div>
-          ${item.notes ? `<div class="meta">${item.notes}</div>` : ""}
+          <strong>${escapeHtml(item.description)} - ${money(item.amount)}</strong>
+          <div class="meta">${escapeHtml(item.customer?.legalName || "Cliente não informado")} ${item.orderNumber != null ? `| Pedido ${item.orderNumber}` : ""} | vence ${dateBR(item.dueDate)}</div>
+          ${item.notes ? `<div class="meta">${escapeHtml(item.notes)}</div>` : ""}
         </div>
         ${financialStatusBadge(item.status)}
       </div>
       <div class="card-actions">
         ${item.status === "Open" ? `<button type="button" class="primary" data-receive-receivable="${item.id}">Marcar recebido</button>` : ""}
-        <button type="button" data-edit-receivable="${item.id}">Editar</button>
-        <button type="button" data-delete-receivable="${item.id}">Excluir</button>
+        <button type="button" data-edit-receivable="${item.id}" ${item.status !== "Open" ? "disabled" : ""}>Editar</button>
+        <button type="button" data-delete-receivable="${item.id}" ${item.status !== "Open" ? "disabled" : ""}>Excluir</button>
       </div>
     </div>
   `).join("") || `<div class="card"><strong>Nenhuma conta a receber.</strong></div>`;
@@ -660,10 +700,10 @@ function renderNotifications() {
     return `
       <div class="notification-item ${item.days < 0 ? "overdue" : ""}">
         <strong>
-          <span>${item.description}</span>
+          <span>${escapeHtml(item.description)}</span>
           <span>${money(item.amount)}</span>
         </strong>
-        <div class="meta">${item.supplierName || "Fornecedor não informado"}</div>
+        <div class="meta">${escapeHtml(item.supplierName || "Fornecedor não informado")}</div>
         <div class="meta">${status} - ${dateBR(item.dueDate)}</div>
         <div class="card-actions">
           <button type="button" data-view-shortcut="payables">Abrir contas</button>
@@ -678,11 +718,11 @@ function addItemRow() {
   const row = document.createElement("div");
   row.className = "row item-row";
   row.innerHTML = `
-    <input name="productCode" placeholder="4300" required>
-    <input name="quantity" type="number" step="0.001" min="0.001" value="1" required>
-    <input name="unitPrice" type="number" step="0.01" min="0.01" placeholder="auto">
-    <input name="totalAmount" type="number" step="0.01" min="0.01" placeholder="auto">
-    <div class="product-hint">Digite o codigo</div>
+    <input name="productCode" aria-label="Código do produto" placeholder="4300" required>
+    <input name="quantity" aria-label="Quantidade" type="number" step="0.001" min="0.001" value="1" required>
+    <input name="unitPrice" aria-label="Preço por unidade de venda" type="number" step="0.01" min="0.01" placeholder="auto">
+    <input name="totalAmount" aria-label="Total do item" type="number" step="0.01" min="0.01" placeholder="auto">
+    <div class="product-hint">Digite o código</div>
     <button type="button">Remover</button>
   `;
   $("button", row).addEventListener("click", () => {
@@ -707,13 +747,22 @@ function refreshProductHints(source = null) {
     const hint = $(".product-hint", row);
     const product = state.products.find(x => x.code.toLowerCase() === code.toLowerCase());
 
+    if (source?.name === "productCode" && source.closest(".item-row") === row) {
+      row.dataset.manualUnitPrice = "false";
+      row.dataset.manualTotal = "false";
+      unitPriceInput.value = "";
+      totalInput.value = "";
+    }
+    if (source?.name === "quantity" && source.closest(".item-row") === row)
+      row.dataset.manualTotal = "false";
+
     hint.classList.remove("ok", "warn");
     if (!code) {
-      hint.textContent = "Digite o codigo";
+      hint.textContent = "Digite o código";
       return;
     }
 
-    if (!product) {
+    if (!product || !product.isActive) {
       hint.textContent = "Produto não encontrado";
       hint.classList.add("warn");
       return;
@@ -745,9 +794,15 @@ function refreshProductHints(source = null) {
 }
 
 async function submitJson(form, url, bodyFactory, afterSave, method = "POST") {
+  if (form.dataset.saving === "true") return;
+  const submit = $("button[type='submit']", form);
+  form.dataset.saving = "true";
+  form.setAttribute("aria-busy", "true");
+  if (submit) { submit.disabled = true; submit.textContent = "Salvando…"; }
   try {
     const result = await api(url, { method, body: JSON.stringify(bodyFactory(form)) });
     form.reset();
+    delete form.dataset.dirty;
     state.editing[form.dataset.editKey] = null;
     updateFormMode(form);
     closeEditModal();
@@ -756,11 +811,17 @@ async function submitJson(form, url, bodyFactory, afterSave, method = "POST") {
       addItemRow();
     }
     toast("Salvo com sucesso.");
-    await refreshAll();
+    try { await refreshAll(); }
+    catch { toast("Salvo. A atualização da lista falhou; use Atualizar dados."); }
     if (afterSave) afterSave(result);
   } catch (error) {
     toast(error.message || "Não foi possível salvar. Veja os dados informados.");
     console.error(error);
+  } finally {
+    delete form.dataset.saving;
+    form.removeAttribute("aria-busy");
+    if (submit) submit.disabled = false;
+    updateFormMode(form);
   }
 }
 
@@ -779,10 +840,34 @@ function updateFormMode(form) {
   const primary = $("button.primary", form);
   const cancel = $("[data-cancel-edit]", form);
   if (primary) primary.textContent = editing ? "Salvar edição" : primary.dataset.createLabel;
-  if (cancel) cancel.style.display = editing ? "block" : "none";
+  if (cancel) cancel.style.display = editing || editModal.form === form ? "inline-flex" : "none";
+}
+
+function openCreateForm(key) {
+  const names = { customer: "Novo cliente", product: "Novo produto", seller: "Novo vendedor", region: "Nova região", vehicle: "Novo veículo", order: "Novo pedido", load: "Nova carga", payable: "Nova conta a pagar", receivable: "Nova conta a receber" };
+  const form = $(`[data-edit-key='${key}']`);
+  if (!form || !names[key]) return;
+  const resumeDraft = form.dataset.dirty === "true" && !state.editing[key];
+  if (!resumeDraft) {
+    if (form.dataset.dirty === "true" && !confirm("Descartar as alterações deste formulário?")) return;
+    form.reset();
+    delete form.dataset.dirty;
+    if (key === "order") {
+      $("#customerSearch").value = "";
+      fillCustomerSelect();
+      $("#itemRows").innerHTML = "";
+      addItemRow();
+    }
+    if (key === "load") form.elements.scheduledDate.value = localDateOnly(new Date());
+  }
+  state.editing[key] = null;
+  if (key === "load") renderLoadOrderChoices();
+  window.FortyControls?.sync(form);
+  openEditModal(form, names[key]);
 }
 
 function openEditModal(form, title) {
+  editModal.returnFocus = document.activeElement;
   if (editModal.form && editModal.form !== form) {
     closeEditModal();
   }
@@ -795,14 +880,20 @@ function openEditModal(form, title) {
   editModal.form = form;
   $("#editModalTitle").textContent = title;
   $("#editModalBody").append(form);
+  $("#editModal").classList.toggle("compact-modal", form.id === "regionForm");
+  $("#editModal").classList.toggle("medium-modal", ["sellerForm", "vehicleForm"].includes(form.id));
   $("#editModal").classList.add("open");
   $("#editModal").setAttribute("aria-hidden", "false");
+  updateFormMode(form);
+  $("main").inert = true;
+  $("aside").inert = true;
   form.scrollTop = 0;
-  form.querySelector("input, select, button")?.focus();
+  $("#closeEditModal").focus();
 }
 
 function closeEditModal() {
   if (!editModal.form) return;
+  window.FortyControls?.closeAll();
 
   if (editModal.placeholder?.parentNode) {
     editModal.placeholder.parentNode.insertBefore(editModal.form, editModal.placeholder);
@@ -812,6 +903,9 @@ function closeEditModal() {
   $("#editModal").classList.remove("open");
   $("#editModal").setAttribute("aria-hidden", "true");
   $("#editModalTitle").textContent = "Editar item";
+  $("main").inert = false;
+  $("aside").inert = false;
+  editModal.returnFocus?.focus();
   editModal.form = null;
   editModal.placeholder = null;
 }
@@ -924,25 +1018,49 @@ function applyPaymentCondition() {
   if (days === undefined) return;
   const dueDate = new Date();
   dueDate.setDate(dueDate.getDate() + days);
-  form.elements.dueDate.value = dueDate.toISOString().slice(0, 10);
+  form.elements.dueDate.value = localDateOnly(dueDate);
+  window.FortyControls?.syncDate(form.elements.dueDate);
+}
+
+function closeNavGroups() {
+  $$(".nav-group").forEach(group => {
+    group.classList.remove("open");
+    $("[data-menu-toggle]", group)?.setAttribute("aria-expanded", "false");
+  });
 }
 
 function wireNav() {
-  $$("aside [data-view]").forEach(button => {
-    button.addEventListener("click", () => showView(button.dataset.view));
-  });
-
+  const mobile = matchMedia("(max-width: 980px)");
+  const toggle = $("#sidebarToggle");
+  const setMobileNavigation = collapsed => {
+    document.body.classList.toggle("sidebar-collapsed", collapsed);
+    toggle.setAttribute("aria-expanded", String(!collapsed));
+    toggle.setAttribute("aria-label", collapsed ? "Abrir navegação" : "Fechar navegação");
+    toggle.title = collapsed ? "Abrir navegação" : "Fechar navegação";
+  };
+  setMobileNavigation(mobile.matches);
+  toggle.addEventListener("click", () => setMobileNavigation(!document.body.classList.contains("sidebar-collapsed")));
+  mobile.addEventListener("change", () => { closeNavGroups(); setMobileNavigation(mobile.matches); });
+  $$("aside [data-view]").forEach(button => button.addEventListener("click", () => showView(button.dataset.view)));
   $$("[data-menu-toggle]").forEach(button => {
+    const group = button.closest(".nav-group");
+    const submenu = $(".nav-submenu", group);
+    submenu.id = `nav-${button.dataset.menuToggle}`;
+    button.setAttribute("aria-controls", submenu.id);
+    button.setAttribute("aria-expanded", "false");
     button.addEventListener("click", () => {
-      button.closest(".nav-group")?.classList.toggle("open");
+      const open = !group.classList.contains("open");
+      closeNavGroups();
+      group.classList.toggle("open", open);
+      button.setAttribute("aria-expanded", String(open));
     });
   });
-
-  $("#sidebarToggle").addEventListener("click", () => {
-    const isCollapsed = document.body.classList.toggle("sidebar-collapsed");
-    const label = isCollapsed ? "Expandir menu" : "Minimizar menu";
-    $("#sidebarToggle").setAttribute("title", label);
-    $("#sidebarToggle").setAttribute("aria-label", label);
+  document.addEventListener("click", event => { if (!event.target.closest("#sidebar")) closeNavGroups(); });
+  document.addEventListener("keydown", event => {
+    if (event.key !== "Escape") return;
+    const current = $(".nav-group.open [data-menu-toggle]");
+    closeNavGroups();
+    current?.focus();
   });
 }
 
@@ -962,6 +1080,8 @@ function setupFormModes() {
   for (const [formId, key] of Object.entries(keys)) {
     const form = $(`#${formId}`);
     form.dataset.editKey = key;
+    form.addEventListener("input", () => form.dataset.dirty = "true");
+    form.addEventListener("change", () => form.dataset.dirty = "true");
     const primary = $("button.primary", form);
     if (primary) primary.dataset.createLabel = primary.textContent;
     updateFormMode(form);
@@ -969,10 +1089,13 @@ function setupFormModes() {
 }
 
 function resetEdit(key) {
-  state.editing[key] = null;
   const form = $(`[data-edit-key='${key}']`);
   if (!form) return;
+  if (form.dataset.saving === "true") return;
+  if (form.dataset.dirty === "true" && !confirm("Descartar as alterações deste formulário?")) return;
+  state.editing[key] = null;
   form.reset();
+  delete form.dataset.dirty;
   updateFormMode(form);
   if (key === "order") {
     $("#itemRows").innerHTML = "";
@@ -997,6 +1120,7 @@ function fillForm(form, values) {
       field.value = value ?? "";
     }
   }
+  window.FortyControls?.sync(form);
 }
 
 function editCustomer(id) {
@@ -1054,7 +1178,7 @@ function editOrder(id) {
   if (!order) return;
   state.editing.order = id;
   const form = $("#orderForm");
-  $("#customerSearch").value = order.customer?.legalName ?? "";
+  $("#customerSearch").value = "";
   fillCustomerSelect();
   fillForm(form, {
     customerId: order.customerId,
@@ -1133,7 +1257,7 @@ async function deleteResource(label, url) {
   if (!confirm(`Tem certeza que deseja excluir ${label}?`)) return;
   try {
     await api(url, { method: "DELETE" });
-    toast("Excluido com sucesso.");
+    toast("Excluído com sucesso.");
     await refreshAll();
   } catch (error) {
     toast(error.message || "Não foi possível excluir.");
@@ -1142,17 +1266,47 @@ async function deleteResource(label, url) {
 }
 
 function showView(view) {
+  window.FortyControls?.closeAll();
   const button = $(`aside [data-view='${view}']`);
   if (!button) return;
-  $$("aside [data-view]").forEach(x => x.classList.remove("active"));
-  $$(".view").forEach(x => x.classList.remove("active"));
-  button.classList.add("active");
-  $(`#${view}`).classList.add("active");
-  const group = button.closest(".nav-group");
-  if (group) group.classList.add("open");
+  $$("aside [data-view]").forEach(x => {
+    x.classList.toggle("active", x === button);
+    x.setAttribute("aria-current", x === button ? "page" : "false");
+  });
+  $$(".view").forEach(x => x.classList.toggle("active", x.id === view));
+  const currentGroup = button.closest(".nav-group");
+  $$(".nav-group").forEach(group => group.classList.toggle("current", group === currentGroup));
+  closeNavGroups();
+  const category = currentGroup ? $("[data-menu-toggle] .nav-text", currentGroup).textContent : "Área de trabalho";
+  $("#workspaceLocation").textContent = `${category} / ${$(".nav-text", button).textContent}`;
+  window.scrollTo({ top: 0, behavior: "instant" });
+  if (matchMedia("(max-width: 980px)").matches && !document.body.classList.contains("sidebar-collapsed")) $("#sidebarToggle").click();
+  const heading = $(`#${view} > header h2`);
+  if (heading) { heading.setAttribute("tabindex", "-1"); heading.focus({ preventScroll: true }); }
+}
+
+function preventDirtyExit(event) {
+  if ($$("form[data-dirty='true']").length) { event.preventDefault(); event.returnValue = ""; }
 }
 
 function wireActions() {
+  $("#refreshData").addEventListener("click", () => {
+    if ($$("form[data-dirty='true']").length) {
+      toast("Salve ou cancele os formulários em preenchimento antes de atualizar.");
+      return;
+    }
+    refreshAll().catch(error => toast(error.message));
+  });
+  ["#orderSearch", "#orderStatusFilter"].forEach(selector => $(selector).addEventListener(selector === "#orderStatusFilter" ? "change" : "input", () => {
+    visibleOrders = 40;
+    renderOrders();
+  }));
+  $("#moreOrders").addEventListener("click", () => { visibleOrders += 40; renderOrders(); });
+  window.addEventListener("beforeunload", preventDirtyExit);
+  window.addEventListener("unhandledrejection", event => {
+    toast(event.reason?.message || "Não foi possível concluir a operação.");
+    event.preventDefault();
+  });
   $("#addItem").addEventListener("click", addItemRow);
   $("#customerSearch").addEventListener("input", fillCustomerSelect);
   $("#orderForm select[name='customerId']").addEventListener("change", updateOrderCustomerHint);
@@ -1166,6 +1320,7 @@ function wireActions() {
     else closeEditModal();
   });
   $("#notificationButton").addEventListener("click", () => {
+    closeNavGroups();
     const panel = $("#notificationPanel");
     const isHidden = panel.hidden;
     panel.hidden = !isHidden;
@@ -1189,7 +1344,7 @@ function wireActions() {
   });
 
   document.addEventListener("click", async event => {
-    const target = event.target;
+    const target = event.target.closest("button") || event.target;
     if (target.id === "editModal") {
       const key = editModal.form?.dataset?.editKey;
       if (key) resetEdit(key);
@@ -1201,6 +1356,7 @@ function wireActions() {
       if (panel) panel.hidden = true;
       $("#notificationButton")?.setAttribute("aria-expanded", "false");
     }
+    if (target.dataset?.create) return openCreateForm(target.dataset.create);
     if (target.dataset?.viewShortcut) return showView(target.dataset.viewShortcut);
 
     if (target.dataset?.editCustomer) return editCustomer(target.dataset.editCustomer);
@@ -1263,6 +1419,14 @@ function wireActions() {
   });
 
   document.addEventListener("keydown", event => {
+    if (event.fortyControlHandled) return;
+    if (event.key === "Tab" && editModal.form) {
+      const elements = $$("button:not(:disabled), input:not(:disabled):not([type=hidden]):not(.tomselected), select:not(:disabled):not(.tomselected), textarea:not(:disabled), [tabindex='0']", $("#editModal"))
+        .filter(x => x.getClientRects().length > 0);
+      const first = elements[0], last = elements.at(-1);
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
+      if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
+    }
     if (event.key !== "Escape" || !editModal.form) return;
     resetEdit(editModal.form.dataset.editKey);
   });
@@ -1296,24 +1460,24 @@ function renderVale(vale) {
       <div class="vale-top">
         <div><strong>Data</strong>: ${new Date(vale.issuedAt).toLocaleString("pt-BR")}</div>
         <div><strong>Pedido</strong>: ${vale.number}</div>
-        <div><strong>Carregamento</strong>: ${vale.loadingNumber ?? "-"}</div>
-        <div><strong>Vendedor</strong>: ${vale.seller?.name ?? "-"}</div>
+        <div><strong>Carregamento</strong>: ${escapeHtml(vale.loadingNumber ?? "-")}</div>
+        <div><strong>Vendedor</strong>: ${escapeHtml(vale.seller?.name ?? "-")}</div>
       </div>
       <div class="vale-client">
         <div>
-          <strong>Cliente</strong>: ${customer.legalName}<br>
-          Endereço: ${customer.street}, ${customer.number} ${customer.complement ?? ""}<br>
-          Bairro: ${customer.district}
+          <strong>Cliente</strong>: ${escapeHtml(customer.legalName)}<br>
+          Endereço: ${escapeHtml(customer.street)}, ${escapeHtml(customer.number)} ${escapeHtml(customer.complement ?? "")}<br>
+          Bairro: ${escapeHtml(customer.district)}
         </div>
         <div>
-          <strong>CNPJ</strong>: ${customer.taxId}
-          <strong>IE</strong>: ${customer.stateRegistration ?? "-"}<br>
-          Número: ${customer.number} Comp.: ${customer.complement ?? ""}<br>
-          CEP: ${customer.postalCode ?? "-"}
+          <strong>CNPJ</strong>: ${escapeHtml(customer.taxId)}
+          <strong>IE</strong>: ${escapeHtml(customer.stateRegistration ?? "-")}<br>
+          Número: ${escapeHtml(customer.number)} Comp.: ${escapeHtml(customer.complement ?? "")}<br>
+          CEP: ${escapeHtml(customer.postalCode ?? "-")}
         </div>
         <div>
-          <strong>Contato</strong>: ${customer.phone ?? "-"}<br>
-          Cidade: ${customer.city} - UF: ${customer.state}
+          <strong>Contato</strong>: ${escapeHtml(customer.phone ?? "-")}<br>
+          Cidade: ${escapeHtml(customer.city)} - UF: ${escapeHtml(customer.state)}
         </div>
       </div>
       <div class="vale-products-label">Produtos</div>
@@ -1334,9 +1498,9 @@ function renderVale(vale) {
             <tr>
               <td>${index + 1}</td>
               <td class="right">${Number(item.quantity).toFixed(2)}</td>
-              <td>${item.unit}</td>
-              <td>${item.productCode}</td>
-              <td>${item.productName}</td>
+              <td>${escapeHtml(item.unit)}</td>
+              <td>${escapeHtml(item.productCode)}</td>
+              <td>${escapeHtml(item.productName)}</td>
               <td class="right">${money(item.unitPrice)}</td>
               <td class="right">${money(item.totalAmount)}</td>
             </tr>
@@ -1563,11 +1727,13 @@ function reportSalesPosition(filters = {}) {
           <tr>
             <th>Quant.</th>
             <th>Cliente</th>
+            <th>Vendedor</th>
+            <th>Produto</th>
             <th>Cond. Pgto</th>
             <th class="right">Preço</th>
             <th class="right">V. Total</th>
             <th>Emissão</th>
-            <th>Data Ent.</th>
+            <th>Vencimento</th>
             <th>Obs.</th>
           </tr>
         </thead>
@@ -1576,6 +1742,8 @@ function reportSalesPosition(filters = {}) {
             <tr>
               <td class="right">${quantityRaw(item.quantity)}</td>
               <td>${escapeHtml(order.customer?.legalName ?? "-")}</td>
+              <td>${escapeHtml(order.seller?.name ?? "-")}</td>
+              <td>${escapeHtml(item.productCode)} — ${escapeHtml(item.productName)}</td>
               <td>${escapeHtml(order.paymentCondition ?? "-")}</td>
               <td class="right">${money(item.unitPrice)}</td>
               <td class="right">${money(item.totalAmount)}</td>
@@ -1583,7 +1751,7 @@ function reportSalesPosition(filters = {}) {
               <td>${dateBR(order.dueDate)}</td>
               <td>${escapeHtml(order.notes ?? "")}</td>
             </tr>
-          `).join("") || `<tr><td colspan="8">Nenhuma venda encontrada com os filtros.</td></tr>`}
+          `).join("") || `<tr><td colspan="10">Nenhuma venda encontrada com os filtros.</td></tr>`}
         </tbody>
       </table>
     `
@@ -1826,20 +1994,142 @@ function reportProducts(filters = {}) {
 }
 
 async function refreshAll() {
-  await refreshCatalog();
-  await refreshOrders();
-  await refreshLoads();
-  await refreshFinancial();
+  if (refreshPromise) return refreshPromise;
+  const button = $("#refreshData");
+  button.disabled = true;
+  button.setAttribute("aria-busy", "true");
+  $("#syncStatus").textContent = "Atualizando dados…";
+  refreshPromise = (async () => {
+    try {
+      const results = await Promise.allSettled([refreshCatalog(), refreshOrders(), refreshLoads(), refreshFinancial()]);
+      const failure = results.find(result => result.status === "rejected");
+      if (failure) throw failure.reason;
+      $("#syncStatus").textContent = `Atualizado às ${new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}`;
+    } catch (error) {
+      $("#syncStatus").textContent = "Falha ao atualizar. Tente novamente.";
+      throw error;
+    } finally {
+      button.disabled = false;
+      button.removeAttribute("aria-busy");
+      refreshPromise = null;
+    }
+  })();
+  return refreshPromise;
 }
 
 async function init() {
+  wireAuthentication();
   setupFormModes();
   wireNav();
   wireForms();
   wireActions();
   addItemRow();
-  await refreshAll();
-  setInterval(() => refreshAll().catch(console.error), 30000);
+  window.FortyControls?.init();
+  $("#dashboardDate").textContent = new Intl.DateTimeFormat("pt-BR", {
+    weekday: "long", day: "numeric", month: "long", timeZone: "America/Sao_Paulo"
+  }).format(new Date());
+  const update = () => {
+    if (!accessToken || document.hidden || editModal.form || window.FortyControls?.isOpen() || $$("form[data-dirty='true']").length ||
+        document.activeElement?.matches("input, select, textarea")) return;
+    refreshAll().catch(console.error);
+  };
+  setInterval(update, 60000);
+  if (accessToken) {
+    updateProfile(await api("/api/auth/me"));
+    document.body.classList.remove("auth-locked");
+    await refreshAll();
+  }
+}
+
+function showLogin(message = "") {
+  if ($("#profileDialog").open) $("#profileDialog").close();
+  accessToken = "";
+  sessionStorage.removeItem("forty.accessToken");
+  document.body.classList.add("auth-locked");
+  $("#loginError").textContent = message;
+  $("#loginForm input[name='password']").value = "";
+}
+
+function updateProfile(user) {
+  const name = user.name || "Minha conta";
+  const initials = name.trim().split(/\s+/).slice(0, 2).map(part => part[0]).join("").toLocaleUpperCase("pt-BR");
+  $("#profileTriggerName").textContent = name;
+  $("#profileName").textContent = name;
+  $("#profileEmail").textContent = user.email || "";
+  $("#profileRole").textContent = user.role || "Usuário";
+  $("#profileAccess").textContent = user.role || "Usuário";
+  $("#profileInitials").textContent = initials;
+  $("#profileAvatar").textContent = initials;
+}
+
+function wireAuthentication() {
+  const profileDialog = $("#profileDialog");
+  $("#profileButton").addEventListener("click", () => {
+    closeNavGroups();
+    $("#notificationPanel").hidden = true;
+    $("#notificationButton").setAttribute("aria-expanded", "false");
+    profileDialog.showModal();
+    $("#profileButton").setAttribute("aria-expanded", "true");
+  });
+  $("#closeProfile").addEventListener("click", () => profileDialog.close());
+  profileDialog.addEventListener("click", event => {
+    const rect = profileDialog.getBoundingClientRect();
+    if (event.target === profileDialog && (event.clientX < rect.left || event.clientX > rect.right ||
+        event.clientY < rect.top || event.clientY > rect.bottom)) profileDialog.close();
+  });
+  profileDialog.addEventListener("close", () => {
+    $("#profileButton").setAttribute("aria-expanded", "false");
+  });
+  $("#loginForm").addEventListener("submit", async event => {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const button = $("button", form);
+    button.disabled = true;
+    button.textContent = "Entrando…";
+    $("#loginError").textContent = "";
+    try {
+      const result = await api("/api/auth/login", { method: "POST", body: JSON.stringify(formJson(form)) });
+      accessToken = result.accessToken;
+      sessionStorage.setItem("forty.accessToken", accessToken);
+      updateProfile(await api("/api/auth/me"));
+      form.elements.password.value = "";
+      document.body.classList.remove("auth-locked");
+      try { await refreshAll(); } catch (error) { toast(error.message); }
+    } catch (error) { $("#loginError").textContent = error.message; }
+    finally { button.disabled = false; button.textContent = "Entrar"; }
+  });
+  $("#logout").addEventListener("click", async () => {
+    if ($$("form[data-dirty='true']").length && !confirm("Sair e descartar os formulários em preenchimento?")) return;
+    window.removeEventListener("beforeunload", preventDirtyExit);
+    showLogin();
+    location.reload();
+  });
+  $("#changePassword").addEventListener("click", () => {
+    profileDialog.close();
+    $("#passwordDialog").showModal();
+  });
+  $("#passwordDialog").addEventListener("close", () => {
+    $("#passwordForm").reset(); $("#passwordError").textContent = "";
+    if (accessToken && !document.body.classList.contains("auth-locked") && !profileDialog.open) {
+      profileDialog.showModal();
+      $("#profileButton").setAttribute("aria-expanded", "true");
+    }
+  });
+  $("#cancelPassword").addEventListener("click", () => { $("#passwordForm").reset(); $("#passwordDialog").close(); });
+  $("#closePassword").addEventListener("click", () => $("#passwordDialog").close());
+  $("#passwordForm").addEventListener("submit", async event => {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const data = formJson(form);
+    if (data.newPassword !== data.confirmPassword) { $("#passwordError").textContent = "As novas senhas não conferem."; return; }
+    const button = $("button[type='submit']", form);
+    button.disabled = true;
+    try {
+      await api("/api/auth/password", { method: "POST", body: JSON.stringify(data) });
+      form.reset(); $("#passwordDialog").close(); showLogin("Senha alterada. Entre novamente.");
+    } catch (error) { $("#passwordError").textContent = error.message; }
+    finally { button.disabled = false; }
+  });
 }
 
 init().catch(error => {

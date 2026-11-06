@@ -56,6 +56,25 @@ public sealed class OrderServiceTests
         Assert.Contains("INEXISTENTE", exception.Message);
     }
 
+    [Theory]
+    [InlineData(0, 10, 10)]
+    [InlineData(1.0001, 10, 10)]
+    [InlineData(2, 10, 100)]
+    public async Task CreateAsync_RejectsInvalidQuantityOrInconsistentPricing(decimal quantity, decimal unitPrice, decimal total)
+    {
+        await using var db = CreateContext();
+        var region = new Region { Name = "QA" };
+        var seller = new Seller { Code = "QA", Name = "QA" };
+        var customer = CreateCustomer(region.Id, seller.Id);
+        var product = new Product { Code = "QA", Name = "QA", Unit = "FD", SalePrice = 10, WeightInKg = 1 };
+        db.AddRange(region, seller, customer, product);
+        await db.SaveChangesAsync();
+        await Assert.ThrowsAsync<InvalidOperationException>(() => new OrderService(db).CreateAsync(
+            new CreateOrderRequest(customer.Id, seller.Id, false, null, null,
+                [new CreateOrderItemRequest(product.Code, quantity, unitPrice, total)]), default));
+        Assert.Empty(await db.Orders.ToListAsync());
+    }
+
     private static AppDbContext CreateContext()
     {
         var options = new DbContextOptionsBuilder<AppDbContext>()

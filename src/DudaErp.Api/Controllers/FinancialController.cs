@@ -38,6 +38,8 @@ public sealed class FinancialController(AppDbContext dbContext) : ControllerBase
     {
         var payable = await dbContext.AccountsPayable.SingleOrDefaultAsync(x => x.Id == id, cancellationToken);
         if (payable is null) return NotFound();
+        if (payable.Status != PayableStatus.Open)
+            return Conflict(new { detail = "Contas já baixadas não podem ser alteradas, excluídas ou baixadas novamente." });
 
         payable.Description = request.Description.Trim();
         payable.SupplierName = request.SupplierName?.Trim();
@@ -54,6 +56,8 @@ public sealed class FinancialController(AppDbContext dbContext) : ControllerBase
     {
         var payable = await dbContext.AccountsPayable.SingleOrDefaultAsync(x => x.Id == id, cancellationToken);
         if (payable is null) return NotFound();
+        if (payable.Status != PayableStatus.Open)
+            return Conflict(new { detail = "Contas já baixadas não podem ser alteradas, excluídas ou baixadas novamente." });
 
         payable.Status = PayableStatus.Paid;
         payable.PaidDate = request.Date ?? DateOnly.FromDateTime(DateTime.Today);
@@ -67,6 +71,8 @@ public sealed class FinancialController(AppDbContext dbContext) : ControllerBase
     {
         var payable = await dbContext.AccountsPayable.SingleOrDefaultAsync(x => x.Id == id, cancellationToken);
         if (payable is null) return NotFound();
+        if (payable.Status != PayableStatus.Open)
+            return Conflict(new { detail = "Contas já baixadas não podem ser alteradas, excluídas ou baixadas novamente." });
 
         dbContext.AccountsPayable.Remove(payable);
         await dbContext.SaveChangesAsync(cancellationToken);
@@ -109,6 +115,8 @@ public sealed class FinancialController(AppDbContext dbContext) : ControllerBase
     {
         var receivable = await dbContext.AccountsReceivable.SingleOrDefaultAsync(x => x.Id == id, cancellationToken);
         if (receivable is null) return NotFound();
+        if (receivable.Status != ReceivableStatus.Open)
+            return Conflict(new { detail = "Contas já baixadas não podem ser alteradas, excluídas ou baixadas novamente." });
 
         receivable.Description = request.Description.Trim();
         receivable.CustomerId = request.CustomerId;
@@ -126,6 +134,8 @@ public sealed class FinancialController(AppDbContext dbContext) : ControllerBase
     {
         var receivable = await dbContext.AccountsReceivable.SingleOrDefaultAsync(x => x.Id == id, cancellationToken);
         if (receivable is null) return NotFound();
+        if (receivable.Status != ReceivableStatus.Open)
+            return Conflict(new { detail = "Contas já baixadas não podem ser alteradas, excluídas ou baixadas novamente." });
 
         receivable.Status = ReceivableStatus.Received;
         receivable.ReceivedDate = request.Date ?? DateOnly.FromDateTime(DateTime.Today);
@@ -139,6 +149,8 @@ public sealed class FinancialController(AppDbContext dbContext) : ControllerBase
     {
         var receivable = await dbContext.AccountsReceivable.SingleOrDefaultAsync(x => x.Id == id, cancellationToken);
         if (receivable is null) return NotFound();
+        if (receivable.Status != ReceivableStatus.Open)
+            return Conflict(new { detail = "Contas já baixadas não podem ser alteradas, excluídas ou baixadas novamente." });
 
         dbContext.AccountsReceivable.Remove(receivable);
         await dbContext.SaveChangesAsync(cancellationToken);
