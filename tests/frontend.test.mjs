@@ -8,6 +8,30 @@ const source = readFileSync(new URL('../src/DudaErp.Api/wwwroot/app.js', import.
 const inventorySource = readFileSync(new URL('../src/DudaErp.Api/wwwroot/inventory.js', import.meta.url), 'utf8');
 const productionSource = readFileSync(new URL('../src/DudaErp.Api/wwwroot/production.js', import.meta.url), 'utf8');
 
+test('envio da programação lê 301 do campo de quantidade, ignorando a busca do dropdown', () => {
+  const ui = setup();
+  vm.runInContext(productionSource, ui.context);
+  const handlers = {};
+  const searchInput = { value: '' };
+  const row = { querySelector(selector) {
+    if (selector === "select[name='productId']") return { value: 'produto-a' };
+    if (selector === "input[name='quantity']") return { value: '301' };
+    if (selector === 'input') return searchInput;
+    throw new Error('Seletor inesperado: ' + selector);
+  } };
+  const form = { dataset: { requestId: 'req-a' }, elements: { scheduledDate: { value: '2026-11-06' }, notes: { value: '' } },
+    querySelectorAll: () => [row], addEventListener: (type, handler) => handlers[type] = handler };
+  ui.elements.set('#productionPlanForm', form);
+  for (const id of ['#addProductionItem', '#productionCompletionForm']) ui.elements.set(id, { addEventListener() {} });
+  let sent;
+  ui.context.captureSubmission = (target, url, build) => sent = { url, body: build(target) };
+  ui.run('submitJson = captureSubmission; wireProduction()');
+  handlers.submit({ preventDefault() {}, target: form });
+  assert.equal(sent.url, '/api/production');
+  assert.equal(sent.body.items[0].productId, 'produto-a');
+  assert.equal(sent.body.items[0].quantity, 301);
+});
+
 test('lista de produção imprime planejado e espaço para conferência sem presumir fabricação', () => {
   const ui = setup();
   vm.runInContext(inventorySource, ui.context);

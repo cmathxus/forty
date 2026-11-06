@@ -53,7 +53,8 @@ function wireProduction() {
   $('#productionPlanForm').addEventListener('submit', event => {
     event.preventDefault();
     const form = event.target;
-    const items = $$('.production-item-row', form).map(row => ({ productId: $('select', row).value, quantity: Number($('input', row).value) }));
+    const items = $$('.production-item-row', form).map(row => ({ productId: $("select[name='productId']", row).value,
+      quantity: Number($("input[name='quantity']", row).value) }));
     if (!items.length) return toast('Adicione pelo menos um produto à lista.');
     if (new Set(items.map(x => x.productId)).size !== items.length) return toast('Agrupe a quantidade em uma única linha por produto.');
     submitJson(form, '/api/production', () => ({ requestId: form.dataset.requestId, scheduledDate: form.elements.scheduledDate.value,
@@ -62,7 +63,8 @@ function wireProduction() {
   $('#productionCompletionForm').addEventListener('submit', async event => {
     event.preventDefault(); const form = event.target;
     if (form.dataset.saving === 'true' || !form.reportValidity()) return;
-    const items = $$('.production-item-row', form).map(row => ({ productId: row.dataset.productId, quantity: Number($('input', row).value) }));
+    const items = $$('.production-item-row', form).map(row => ({ productId: row.dataset.productId,
+      quantity: Number($("input[name='producedQuantity']", row).value) }));
     if (!items.some(x => x.quantity > 0)) return toast('Informe uma quantidade produzida. Se nada foi produzido, cancele a programação.');
     if (!confirm('Concluir a programação e adicionar as quantidades produzidas ao estoque? Confira os valores: esta confirmação não pode ser repetida.')) return;
     form.dataset.saving = 'true'; const button = $('button[type=submit]', form); button.disabled = true;
