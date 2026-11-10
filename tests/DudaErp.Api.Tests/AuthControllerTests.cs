@@ -6,6 +6,9 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
+using Microsoft.AspNetCore.Authentication.BearerToken;
 
 namespace DudaErp.Api.Tests;
 
@@ -22,7 +25,8 @@ public sealed class AuthControllerTests
         db.Users.Add(user);
         await db.SaveChangesAsync();
         var originalStamp = user.SecurityStamp;
-        var controller = new AuthController(db, hasher)
+        using var services = new ServiceCollection().AddLogging().AddAuthentication().AddBearerToken("Bearer").Services.BuildServiceProvider();
+        var controller = new AuthController(db, hasher, services.GetRequiredService<IOptionsMonitor<BearerTokenOptions>>())
         {
             ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext { User =
                 new ClaimsPrincipal(new ClaimsIdentity([new Claim(ClaimTypes.NameIdentifier, user.Id.ToString())], "Bearer")) } }

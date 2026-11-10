@@ -155,6 +155,33 @@ namespace DudaErp.Api.Data.Migrations
                     b.ToTable("Users");
                 });
 
+            modelBuilder.Entity("DudaErp.Api.Domain.AuthSession", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("RefreshNonce")
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("Revoked")
+                        .HasColumnType("boolean");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ExpiresAt");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("AuthSessions");
+                });
+
             modelBuilder.Entity("DudaErp.Api.Domain.Customer", b =>
                 {
                     b.Property<Guid>("Id")
@@ -839,6 +866,25 @@ namespace DudaErp.Api.Data.Migrations
                     b.ToTable("Vehicles");
                 });
 
+            modelBuilder.Entity("Microsoft.AspNetCore.DataProtection.EntityFrameworkCore.DataProtectionKey", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("FriendlyName")
+                        .HasColumnType("text");
+
+                    b.Property<string>("Xml")
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("DataProtectionKeys");
+                });
+
             modelBuilder.Entity("DudaErp.Api.Domain.AccountReceivable", b =>
                 {
                     b.HasOne("DudaErp.Api.Domain.Customer", "Customer")
@@ -847,6 +893,15 @@ namespace DudaErp.Api.Data.Migrations
                         .OnDelete(DeleteBehavior.SetNull);
 
                     b.Navigation("Customer");
+                });
+
+            modelBuilder.Entity("DudaErp.Api.Domain.AuthSession", b =>
+                {
+                    b.HasOne("DudaErp.Api.Domain.AppUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("DudaErp.Api.Domain.Customer", b =>

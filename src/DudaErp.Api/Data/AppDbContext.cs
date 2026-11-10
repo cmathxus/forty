@@ -1,10 +1,13 @@
 using DudaErp.Api.Domain;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.DataProtection.EntityFrameworkCore;
 
 namespace DudaErp.Api.Data;
 
-public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(options)
+public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(options), IDataProtectionKeyContext
 {
+    public DbSet<DataProtectionKey> DataProtectionKeys => Set<DataProtectionKey>();
+    public DbSet<AuthSession> AuthSessions => Set<AuthSession>();
     public DbSet<AppUser> Users => Set<AppUser>();
     public DbSet<StockMovement> StockMovements => Set<StockMovement>();
     public DbSet<ProductionPlan> ProductionPlans => Set<ProductionPlan>();
@@ -24,6 +27,8 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        modelBuilder.Entity<AuthSession>().HasOne<AppUser>().WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Cascade);
+        modelBuilder.Entity<AuthSession>().HasIndex(x => x.ExpiresAt);
         modelBuilder.Entity<ProductionPlan>().HasIndex(x => x.Number).IsUnique();
         modelBuilder.Entity<ProductionPlan>().HasIndex(x => x.RequestId).IsUnique();
         modelBuilder.Entity<ProductionPlan>().Property(x => x.Notes).HasMaxLength(1000);

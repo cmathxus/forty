@@ -9,16 +9,19 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.Authentication.BearerToken;
+using Microsoft.Extensions.Options;
 
 namespace DudaErp.Api.Controllers;
 
 [ApiController]
 [Authorize]
 [Route("api/auth")]
-public sealed class AuthController(AppDbContext db, PasswordHasher<AppUser> hasher) : ControllerBase
+public sealed class AuthController(AppDbContext db, PasswordHasher<AppUser> hasher, IOptionsMonitor<BearerTokenOptions> tokenOptions) : ControllerBase
 {
     public sealed record LoginRequest([Required, EmailAddress] string Email, [Required] string Password);
     public sealed record PasswordRequest([Required] string CurrentPassword, [Required, MinLength(8), MaxLength(128)] string NewPassword);
+    public sealed record RefreshRequest([Required, MaxLength(12000)] string RefreshToken);
 
     [AllowAnonymous]
     [EnableRateLimiting("login")]
@@ -38,14 +41,76 @@ public sealed class AuthController(AppDbContext db, PasswordHasher<AppUser> hash
             user.PasswordHash = hasher.HashPassword(user, request.Password);
             await db.SaveChangesAsync(ct);
         }
+        var session = new AuthSession { UserId = user.Id, ExpiresAt = DateTimeOffset.UtcNow.AddDays(30) };
+        db.AuthSessions.Add(session);
+        await db.SaveChangesAsync(ct);
+        return IssueTokens(user, session);
+    }
+
+    private IActionResult IssueTokens(AppUser user, AuthSession session)
+    {
+        Response.Headers.CacheControl = "no-store";
         var identity = new ClaimsIdentity([
             new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
             new Claim(ClaimTypes.Name, user.Name),
             new Claim(ClaimTypes.Email, user.Email),
             new Claim(ClaimTypes.Role, user.Role),
-            new Claim("security_stamp", user.SecurityStamp.ToString())
+            new Claim("security_stamp", user.SecurityStamp.ToString()),
+            new Claim("session_id", session.Id.ToString()),
+            new Claim("refresh_nonce", session.RefreshNonce.ToString())
         ], "Bearer");
         return SignIn(new ClaimsPrincipal(identity), new AuthenticationProperties(), "Bearer");
+    }
+
+    private AuthenticationTicket? ReadRefresh(string value)
+    {
+        var ticket = tokenOptions.Get("Bearer").RefreshTokenProtector.Unprotect(value);
+        return ticket?.Properties.ExpiresUtc > DateTimeOffset.UtcNow ? ticket : null;
+    }
+
+    [AllowAnonymous]
+    [HttpPost("refresh")]
+    public async Task<IActionResult> Refresh(RefreshRequest request, CancellationToken ct)
+    {
+        var ticket = ReadRefresh(request.RefreshToken);
+        if (ticket is null || !Guid.TryParse(ticket.Principal.FindFirstValue("session_id"), out var sessionId) ||
+            !Guid.TryParse(ticket.Principal.FindFirstValue("refresh_nonce"), out var nonce) ||
+            !Guid.TryParse(ticket.Principal.FindFirstValue(ClaimTypes.NameIdentifier), out var userId) ||
+            !Guid.TryParse(ticket.Principal.FindFirstValue("security_stamp"), out var stamp)) return Unauthorized();
+        var user = await db.Users.AsNoTracking().SingleOrDefaultAsync(x => x.Id == userId && x.IsActive && x.SecurityStamp == stamp, ct);
+        if (user is null || user.Role != ticket.Principal.FindFirstValue(ClaimTypes.Role) || !AccessRules.Roles.Contains(user.Role)) return Unauthorized();
+        var session = await db.AuthSessions.AsNoTracking().SingleOrDefaultAsync(x => x.Id == sessionId && x.UserId == userId &&
+            !x.Revoked && x.ExpiresAt > DateTimeOffset.UtcNow && x.RefreshNonce == nonce, ct);
+        if (session is null) return Unauthorized();
+        var nextNonce = Guid.NewGuid();
+        if (db.Database.IsRelational())
+        {
+            var changed = await db.AuthSessions.Where(x => x.Id == sessionId && x.RefreshNonce == nonce && !x.Revoked)
+                .ExecuteUpdateAsync(set => set.SetProperty(x => x.RefreshNonce, nextNonce), ct);
+            if (changed != 1) return Unauthorized();
+        }
+        else
+        {
+            var tracked = await db.AuthSessions.SingleAsync(x => x.Id == sessionId, ct);
+            if (tracked.RefreshNonce != nonce || tracked.Revoked) return Unauthorized();
+            tracked.RefreshNonce = nextNonce;
+            await db.SaveChangesAsync(ct);
+        }
+        session.RefreshNonce = nextNonce;
+        return IssueTokens(user, session);
+    }
+
+    [AllowAnonymous]
+    [HttpPost("logout")]
+    public async Task<IActionResult> Logout(RefreshRequest request, CancellationToken ct)
+    {
+        var ticket = ReadRefresh(request.RefreshToken);
+        if (ticket is not null && Guid.TryParse(ticket.Principal.FindFirstValue("session_id"), out var id))
+        {
+            var session = await db.AuthSessions.SingleOrDefaultAsync(x => x.Id == id, ct);
+            if (session is not null) { session.Revoked = true; await db.SaveChangesAsync(ct); }
+        }
+        return NoContent();
     }
 
     [HttpGet("me")]

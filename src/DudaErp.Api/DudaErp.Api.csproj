@@ -10,6 +10,7 @@
   <ItemGroup>
     <PackageReference Include="ExcelDataReader" Version="3.7.0" />
     <PackageReference Include="ExcelDataReader.DataSet" Version="3.7.0" />
+    <PackageReference Include="Microsoft.AspNetCore.DataProtection.EntityFrameworkCore" Version="8.0.17" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="8.0.17">
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>

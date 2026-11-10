@@ -9,6 +9,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.RateLimiting;
 using System.Security.Claims;
 using System.Threading.RateLimiting;
+using Microsoft.AspNetCore.DataProtection;
 
 var builder = WebApplication.CreateBuilder(args);
 var port = Environment.GetEnvironmentVariable("PORT");
@@ -42,8 +43,12 @@ builder.Services.AddDbContext<AppDbContext>(options =>
     }));
 builder.Services.AddScoped<OrderService>();
 builder.Services.AddScoped<PasswordHasher<AppUser>>();
+builder.Services.AddDataProtection().SetApplicationName("FORTY").PersistKeysToDbContext<AppDbContext>();
 builder.Services.AddAuthentication("Bearer").AddBearerToken("Bearer", options =>
-    options.BearerTokenExpiration = TimeSpan.FromHours(8));
+{
+    options.BearerTokenExpiration = TimeSpan.FromMinutes(15);
+    options.RefreshTokenExpiration = TimeSpan.FromDays(30);
+});
 builder.Services.AddAuthorization(options =>
 {
     options.DefaultPolicy = new AuthorizationPolicyBuilder().RequireAuthenticatedUser().RequireRole(AccessRules.Roles).Build();
@@ -89,6 +94,14 @@ app.Use(async (context, next) =>
         if (!Guid.TryParse(idText, out var id) || !Guid.TryParse(stampText, out var stamp) ||
             !await db.Users.AsNoTracking().AnyAsync(x => x.Id == id && x.IsActive && x.SecurityStamp == stamp &&
                 x.Role == context.User.FindFirstValue(ClaimTypes.Role), context.RequestAborted))
+        {
+            context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+            return;
+        }
+        var sessionText = context.User.FindFirstValue("session_id");
+        if (sessionText is not null && (!Guid.TryParse(sessionText, out var sessionId) ||
+            !await db.AuthSessions.AsNoTracking().AnyAsync(x => x.Id == sessionId && x.UserId == id && !x.Revoked &&
+                x.ExpiresAt > DateTimeOffset.UtcNow, context.RequestAborted)))
         {
             context.Response.StatusCode = StatusCodes.Status401Unauthorized;
             return;

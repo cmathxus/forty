@@ -17,7 +17,7 @@ const state = {
 let visibleOrders = 40;
 let refreshPromise = null;
 let toastTimer;
-let accessToken = sessionStorage.getItem("forty.accessToken") || "";
+let accessToken = (typeof readAuthSession === 'function' ? readAuthSession()?.accessToken : null) || sessionStorage.getItem("forty.accessToken") || "";
 
 const editModal = {
   form: null,
@@ -68,19 +68,15 @@ function toast(message) {
 }
 
 async function api(path, options = {}) {
-  const requestToken = accessToken;
+  const requestGeneration = authGeneration;
   let response;
   try {
-    response = await fetch(apiUrl(path), {
-    signal: AbortSignal.timeout(30000),
-    ...options,
-    headers: { "Content-Type": "application/json", ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}), ...(options.headers ?? {}) },
-  });
-  } catch {
-    throw new Error("Não foi possível conectar ao servidor. Verifique sua conexão e tente novamente.");
+    response = await authFetch(path, options);
+  } catch (error) {
+    throw new Error(error.message || "Não foi possível conectar ao servidor. Verifique sua conexão e tente novamente.");
   }
 
-  if (requestToken && requestToken !== accessToken) throw new Error("A sessão mudou. Entre novamente para continuar.");
+  if (requestGeneration !== authGeneration) throw new Error("A sessão mudou. Entre novamente para continuar.");
 
   if (!response.ok) {
     if (response.status === 401 && path !== "/api/auth/login") showLogin("Sua sessão expirou. Entre novamente.");
@@ -92,7 +88,7 @@ async function api(path, options = {}) {
 
   if (response.status === 204) return null;
   const data = await response.json();
-  if (requestToken && requestToken !== accessToken) throw new Error("A sessão mudou. Entre novamente para continuar.");
+  if (requestGeneration !== authGeneration) throw new Error("A sessão mudou. Entre novamente para continuar.");
   return data;
 }
 
@@ -1964,6 +1960,7 @@ async function refreshAll() {
 }
 
 async function init() {
+  watchAuthSession();
   wireListPagination();
   window.addEventListener('hashchange', () => {
     if (accessToken) refreshAll().catch(error => toast(error.message));
@@ -2000,8 +1997,7 @@ function showLogin(message = "") {
   if (editModal.form) closeEditModal();
   if ($("#passwordDialog").open) $("#passwordDialog").close();
   if ($("#profileDialog").open) $("#profileDialog").close();
-  accessToken = "";
-  sessionStorage.removeItem("forty.accessToken");
+  clearAuthSession();
   window.FortyAccess?.clear();
   document.body.classList.add("auth-locked");
   $("#loginError").textContent = message;
@@ -2027,6 +2023,13 @@ function updateProfile(user) {
 async function logout() {
   const dirty = $$("form[data-dirty='true']").length > 0;
   if (!(await askConfirmation(dirty ? 'Sair e descartar os formulários em preenchimento?' : 'Deseja sair da sua conta?', { title: 'Sair da conta', accept: 'Sair da conta' }))) return;
+  try {
+    // Espera eventual rotação antes de revogar a sessão do dispositivo.
+    if (authRefreshPromise) await authRefreshPromise;
+    const session = readAuthSession();
+    if (session?.refreshToken) await fetch(apiUrl('/api/auth/logout'), { method: 'POST', signal: AbortSignal.timeout(10000),
+      headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ refreshToken: session.refreshToken }) });
+  } catch { /* A saída local continua disponível mesmo sem conexão. */ }
   showLogin();
   location.reload();
 }
@@ -2058,8 +2061,8 @@ function wireAuthentication() {
     $("#loginError").textContent = "";
     try {
       const result = await api("/api/auth/login", { method: "POST", body: JSON.stringify(formJson(form)) });
-      accessToken = result.accessToken;
-      sessionStorage.setItem("forty.accessToken", accessToken);
+      authGeneration++;
+      saveAuthSession(result);
       updateProfile(await api("/api/auth/me"));
       form.elements.password.value = "";
       document.body.classList.remove("auth-locked");
