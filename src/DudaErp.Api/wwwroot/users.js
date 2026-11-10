@@ -6,15 +6,12 @@ const userRoleDescriptions = {
 };
 
 async function refreshUsers() {
-  state.users = await api('/api/users');
-  renderUsers();
+  await refreshList('users');
 }
 
 function renderUsers() {
-  const term = normalize($('#userSearch').value);
-  const rows = state.users.filter(user => normalize(`${user.name} ${user.email} ${user.role}`).includes(term));
-  const active = state.users.filter(x => x.isActive).length;
-  $('#usersCount').textContent = `${rows.length} ${rows.length === 1 ? 'usuário' : 'usuários'} · ${active} ${active === 1 ? 'ativo' : 'ativos'}`;
+  const rows = listRows('users');
+  $('#usersCount').textContent = listCount('users');
   $('#usersList').innerHTML = rows.map(user => `<div class="mini-card"><strong>${escapeHtml(user.name)}${user.id === state.currentUser?.id ? ' · Você' : ''}</strong>
     <div class="meta">${escapeHtml(user.email)}</div><div class="meta">${escapeHtml(user.role)} · <span class="badge ${user.isActive ? 'green' : ''}">${user.isActive ? 'Ativo' : 'Inativo'}</span></div>
     <div class="card-actions"><button type="button" data-edit-user="${user.id}">Editar acesso</button>${user.id !== state.currentUser?.id ? `<button type="button" data-reset-user-password="${user.id}">Redefinir senha</button>` : ''}</div></div>`).join('') || '<div class="empty-state">Nenhum usuário encontrado.</div>';
@@ -57,7 +54,6 @@ function openUserPassword(id) {
 }
 
 function wireUsers() {
-  $('#userSearch').addEventListener('input', renderUsers);
   $('#userForm').elements.role.addEventListener('change', updateUserRoleHint);
   $('#userForm').addEventListener('submit', event => {
     event.preventDefault(); const form = event.target;

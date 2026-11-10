@@ -1,0 +1,11 @@
+# Paginação e busca
+
+Primeira etapa: listas de clientes, produtos, vendedores, regiões, veículos e usuários. Cada tela busca a página exibida em `/api/lists/{recurso}?page=1&pageSize=20&search=termo`. Os filtros dessas seis listas deixaram de ser aplicados pelo navegador. Os endpoints anteriores continuam disponíveis para os fluxos de seleção de cadastros, indicadores e relatórios; esses consumidores ainda não foram migrados para consultas específicas. Pedidos, cargas, financeiro, estoque e produção ainda usam o comportamento anterior e são as próximas etapas.
+
+A API aceita exclusivamente 20 registros por página, valida número da página e tamanho do termo, aplica a busca antes de contar e paginar e ordena com identificador como desempate. `%`, `_` e barras são tratados literalmente na busca PostgreSQL. Cadastros inativos ficam fora da lista; usuários incluem inativos para permitir reativação. O retorno contém `items`, `total`, `page`, `pageSize` e `totalPages`. Se uma exclusão esvaziar a última página, a API retorna a última página válida; nenhum resultado produz página 1 vazia.
+
+O frontend mantém um estado independente para cada lista e renderiza somente os itens da resposta. Digitar aguarda 300 ms e volta à página 1; respostas de buscas anteriores ou de outra sessão são descartadas. Anterior/Próxima mostram a posição no total filtrado. Falhas oferecem nova tentativa; a navegação preserva a página e o termo. Ao sair da sessão, os estados, timers e campos de busca são limpos. As páginas são consultadas ao abrir a tela e na atualização da tela visível, inclusive após salvar/excluir.
+
+As permissões são verificadas novamente pela API: clientes para administrador/faturamento, produtos para todos os setores, demais cadastros e usuários para administrador. Usuários usam projeção explícita sem hash de senha nem carimbo de segurança.
+
+Verificação: testes PostgreSQL em schema temporário isolado cobrem páginas completas, busca fora da primeira página, curingas literais, inativos, ordenação com empate e exclusão da última página. Testes HTTP cobrem permissões e parâmetros inválidos. Testes JavaScript cobrem envio da busca, troca de página, debounce e descarte de respostas antigas.

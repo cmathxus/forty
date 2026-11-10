@@ -22,7 +22,13 @@ A saída registra nome do usuário e data/hora. A baixa registra quem conferiu, 
 
 Todos os novos pedidos de baixa, inclusive em cargas históricas, exigem a conferência dos itens. A proteção que evita créditos retroativos em cargas sem débito de estoque continua valendo.
 
-## QR Code no romaneio
+## Data e horário de chegada
+
+Registrar retorno da carga abre um formulário vazio de data e hora local. A expedição ou o administrador informa a chegada real ao depósito, inclusive após conferir os pedidos; esse horário permanece separado de DeliveredAt (conferência) e ReturnRecordedAt (momento do registro), com ReturnRecordedBy indicando o responsável. A data/hora é convertida para UTC na gravação e exibida no horário local do dispositivo. A API rejeita horário futuro, anterior à saída conhecida, carga sem saída e repetição do registro. Uma carga que voltou e ainda tem conferência pendente aparece como Retornou · a conferir e deixa o contador de cargas em rota. O registro da chegada não credita produtos no estoque. Cargas históricas permanecem sem horário até registro explícito. A migration DeliveryLoadReturnTime só adiciona campos opcionais; não preenche horários antigos.
+
+O horário aparece no cartão da carga, no relatório individual, na conferência e no romaneio de expedição.
+
+## Uso do QR Code
 
 Carregamento expedição imprime um QR Code por carga, também no relatório agrupado por região e no PDF salvo pelo navegador. O código contém apenas o endereço do frontend com #conferencia=ID_DA_CARGA. A geração é local, em SVG com margem branca, sem serviço externo. O endereço conserva o domínio e o caminho da instalação (inclusive /forty/ no Pages) e remove parâmetros da URL. Para testar no celular, imprima a partir de um endereço publicado e acessível; localhost do computador não é acessível no celular.
 

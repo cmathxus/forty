@@ -247,19 +247,8 @@ function renderCatalogLists() {
 }
 
 function renderCustomersList() {
-  const term = getFilter("customers");
-  const rows = state.customers
-    .filter(customer => customer.isActive)
-    .filter(customer => matches(customer, term, [
-      x => x.legalName,
-      x => x.taxId,
-      x => x.city,
-      x => x.phone,
-      x => x.email
-    ]))
-    .slice(0, 80);
-
-  $("#customersCount").textContent = `${rows.length} de ${state.customers.filter(x => x.isActive).length}`;
+  const rows = listRows("customers");
+  $("#customersCount").textContent = listCount("customers");
   $("#customersList").innerHTML = rows.map(customer => `
     <div class="mini-card">
       <strong>${escapeHtml(customer.legalName)}</strong>
@@ -274,19 +263,8 @@ function renderCustomersList() {
 }
 
 function renderProductsList() {
-  const term = getFilter("products");
-  const rows = state.products
-    .filter(product => product.isActive)
-    .filter(product => matches(product, term, [
-      x => x.code,
-      x => x.name,
-      x => x.ncm,
-      x => x.cest,
-      x => x.boxBarcode
-    ]))
-    .slice(0, 80);
-
-  $("#productsCount").textContent = `${rows.length} de ${state.products.filter(x => x.isActive).length}`;
+  const rows = listRows("products");
+  $("#productsCount").textContent = listCount("products");
   $("#productsList").innerHTML = rows.map(product => `
     <div class="mini-card">
       <strong>${escapeHtml(product.code)} - ${escapeHtml(product.name)}</strong>
@@ -301,9 +279,8 @@ function renderProductsList() {
 }
 
 function renderSellersList() {
-  const term = getFilter("sellers");
-  const rows = state.sellers.filter(seller => seller.isActive && matches(seller, term, [x => x.code, x => x.name, x => x.email, x => x.phone]));
-  $("#sellersCount").textContent = `${rows.length} de ${state.sellers.filter(x => x.isActive).length}`;
+  const rows = listRows("sellers");
+  $("#sellersCount").textContent = listCount("sellers");
   $("#sellersList").innerHTML = rows.map(seller => `
     <div class="mini-card">
       <strong>${escapeHtml(seller.code)} - ${escapeHtml(seller.name)}</strong>
@@ -318,9 +295,8 @@ function renderSellersList() {
 }
 
 function renderRegionsList() {
-  const term = getFilter("regions");
-  const rows = state.regions.filter(region => region.isActive && matches(region, term, [x => x.name]));
-  $("#regionsCount").textContent = `${rows.length} de ${state.regions.filter(x => x.isActive).length}`;
+  const rows = listRows("regions");
+  $("#regionsCount").textContent = listCount("regions");
   $("#regionsList").innerHTML = rows.map(region => `
     <div class="mini-card">
       <strong>${escapeHtml(region.name)}</strong>
@@ -334,9 +310,8 @@ function renderRegionsList() {
 }
 
 function renderVehiclesList() {
-  const term = getFilter("vehicles");
-  const rows = state.vehicles.filter(vehicle => vehicle.isActive && matches(vehicle, term, [x => x.name, x => x.plate, x => x.model]));
-  $("#vehiclesCount").textContent = `${rows.length} de ${state.vehicles.filter(x => x.isActive).length}`;
+  const rows = listRows("vehicles");
+  $("#vehiclesCount").textContent = listCount("vehicles");
   $("#vehiclesList").innerHTML = rows.map(vehicle => `
     <div class="mini-card">
       <strong>${escapeHtml(vehicle.name)} - ${escapeHtml(vehicle.plate)}</strong>
@@ -373,7 +348,7 @@ function statusBadge(status) {
 function renderMetrics() {
   const pendingOrders = state.orders.filter(order => order.status === "Confirmed");
   const openLoads = state.loads.filter(load => load.status === "Open");
-  const streetLoads = state.loads.filter(load => load.status === "Dispatched");
+  const streetLoads = state.loads.filter(load => load.status === "Dispatched" && !load.returnedAt);
   const receivableTotal = state.receivables.filter(item => item.status === "Open").reduce((sum, item) => sum + Number(item.amount || 0), 0);
   const overdue = state.payables.filter(item => item.status === "Open" && daysUntil(item.dueDate) < 0).length;
   $("#waitingOrderValue").textContent = money(pendingOrders.reduce((sum, order) => sum + Number(order.totalAmount || 0), 0));
@@ -399,7 +374,7 @@ function renderDashboard() {
   if (!actions || !recent) return;
 
   const pendingOrders = state.orders.filter(order => order.status === "Confirmed");
-  const loadsOnStreet = state.loads.filter(load => load.status === "Dispatched");
+  const loadsOnStreet = state.loads.filter(load => load.status === "Dispatched" && !load.returnedAt);
   const duePayables = state.payables
     .filter(item => item.status === "Open")
     .map(item => ({ ...item, days: daysUntil(item.dueDate) }))
@@ -524,11 +499,13 @@ function renderLoads() {
           <div class="meta">${dateBR(load.scheduledDate)} | ${escapeHtml(load.vehicle ? `${load.vehicle.name} - ${load.vehicle.plate}` : "Sem veículo")} | Motorista: ${escapeHtml(load.driverName || "-")}</div>
           <div class="meta">${load.orders.length} pedidos | Total ${money(total)} | Recebido ${money(received)}</div>
           ${load.dispatchedAt ? `<div class="meta">Saída registrada por ${escapeHtml(load.dispatchedBy || 'Não registrado')} em ${checkedDateTime(load.dispatchedAt)}</div>` : ''}
+          ${loadReturnDetails(load)}
         </div>
-        ${statusBadge(load.status)}
+        ${load.returnedAt && load.status === 'Dispatched' ? '<span class="badge amber">Retornou · a conferir</span>' : statusBadge(load.status)}
       </div>
       <div class="card-actions">
         ${load.status === "Open" ? `<button type="button" data-dispatch="${load.id}">Marcar saída pra rua</button>` : ""}
+        ${['Dispatched', 'Closed'].includes(load.status) && !load.returnedAt ? `<button type="button" data-load-return="${load.id}">Registrar retorno da carga</button>` : ''}
         <button type="button" data-report-load="${load.id}">Relatório da carga</button>
         <button type="button" data-report-loading="${load.id}">Carregamento expedição</button><button type="button" data-report-reconciliation="${load.id}">Conferência da carga</button>
         <button type="button" data-edit-load="${load.id}" ${load.status !== "Open" ? "disabled" : ""}>Editar</button>
@@ -873,7 +850,7 @@ function openEditModal(form, title) {
   $("#editModalTitle").textContent = title;
   $("#editModalBody").append(form);
   $("#editModal").classList.toggle("compact-modal", form.id === "regionForm");
-  $("#editModal").classList.toggle("medium-modal", ["sellerForm", "vehicleForm", "stockForm", "userForm", "userPasswordForm"].includes(form.id));
+  $("#editModal").classList.toggle("medium-modal", ["sellerForm", "vehicleForm", "stockForm", "userForm", "userPasswordForm", "loadReturnForm"].includes(form.id));
   $("#editModal").classList.add("open");
   $("#editModal").setAttribute("aria-hidden", "false");
   updateFormMode(form);
@@ -1069,6 +1046,7 @@ function setupFormModes() {
     receivableForm: "receivable",
     stockForm: "stock",
     deliveryCheckForm: "delivery",
+    loadReturnForm: "loadReturn",
     productionPlanForm: "productionPlan",
     productionCompletionForm: "productionCompletion",
     userForm: "user",
@@ -1282,6 +1260,7 @@ function showView(view) {
   if (matchMedia("(max-width: 980px)").matches && !document.body.classList.contains("sidebar-collapsed")) $("#sidebarToggle").click();
   const heading = $(`#${view} > header h2`);
   if (heading) { heading.setAttribute("tabindex", "-1"); heading.focus({ preventScroll: true }); }
+  if (pagedListDefinitions[view]) refreshList(view).catch(error => toast(error.message));
 }
 
 function preventDirtyExit(event) {
@@ -1326,9 +1305,6 @@ function wireActions() {
     $("#notificationButton").setAttribute("aria-expanded", String(isHidden));
   });
 
-  $$("[data-filter]").forEach(input => {
-    input.addEventListener("input", renderCatalogLists);
-  });
 
   $$("[data-report]").forEach(button => {
     button.addEventListener("click", () => {
@@ -1352,6 +1328,7 @@ function wireActions() {
     if (target.dataset?.productionCancel) return cancelProductionPlan(target.dataset.productionCancel);
     if (target.hasAttribute?.('data-remove-production-item')) { target.closest('.production-item-row').remove(); $('#productionPlanForm').dataset.dirty = 'true'; return; }
     if (target.dataset?.reconcile) return openDeliveryCheck(target.dataset.reconcile);
+    if (target.dataset?.loadReturn) return openLoadReturn(target.dataset.loadReturn);
     if (target.dataset?.checkPreset) return fillDeliveryPreset(target.dataset.checkPreset);
     if (target.dataset?.reportReconciliation) return openReport("reconciliation", target.dataset.reportReconciliation);
     if (target.id === "editModal") {
@@ -1768,7 +1745,7 @@ function reportLoads(filters = {}) {
     title: "Relatório de cargas e entregas",
     body: `
       <table>
-        <thead><tr><th>Carga</th><th>Data</th><th>Região</th><th>Veículo</th><th>Motorista</th><th>Status</th><th>Pedidos</th><th class="right">Total</th><th class="right">Recebido</th></tr></thead>
+        <thead><tr><th>Carga</th><th>Data</th><th>Região</th><th>Veículo</th><th>Motorista</th><th>Status</th><th>Retorno ao depósito</th><th>Pedidos</th><th class="right">Total</th><th class="right">Recebido</th></tr></thead>
         <tbody>
           ${loads.map(load => {
             const total = load.orders.reduce((sum, item) => sum + Number(item.order?.totalAmount ?? 0), 0);
@@ -1781,12 +1758,13 @@ function reportLoads(filters = {}) {
                 <td>${escapeHtml(load.vehicle ? `${load.vehicle.name} - ${load.vehicle.plate}` : "-")}</td>
                 <td>${escapeHtml(load.driverName ?? "-")}</td>
                 <td>${escapeHtml(load.status)}</td>
+                <td>${load.returnedAt ? checkedDateTime(load.returnedAt) : 'Não registrado'}</td>
                 <td>${load.orders.length}</td>
                 <td class="right">${money(total)}</td>
                 <td class="right">${money(received)}</td>
               </tr>
             `;
-          }).join("") || `<tr><td colspan="9">Nenhuma carga encontrada com os filtros.</td></tr>`}
+          }).join("") || `<tr><td colspan="10">Nenhuma carga encontrada com os filtros.</td></tr>`}
         </tbody>
       </table>
     `
@@ -1803,6 +1781,7 @@ function reportSingleLoad(id) {
     title: `Carga ${load.number} - ${load.region?.name ?? ""}`,
     body: `
       ${renderLoadQr(load)}
+      ${loadReturnDetails(load)}
       <div class="summary">
         <div><strong>Data</strong><br>${dateBR(load.scheduledDate)}</div>
         <div><strong>Veículo</strong><br>${escapeHtml(load.vehicle ? `${load.vehicle.name} - ${load.vehicle.plate}` : "-")}</div>
@@ -1887,6 +1866,7 @@ function renderLoadingLoadBody(load, showLoadTitle) {
   return `
       ${showLoadTitle ? `<h2 class="loading-load-title">Carregamento ${load.number} - ${escapeHtml(load.region?.name ?? "")}</h2>` : ""}
       ${renderLoadQr(load)}
+      ${loadReturnDetails(load)}
       <div class="summary">
         <div><strong>Carregamento</strong><br>${load.number} - ${escapeHtml(load.region?.name ?? "")}</div>
         <div><strong>Data</strong><br>${dateBR(load.scheduledDate)}</div>
@@ -2007,10 +1987,10 @@ async function refreshAll() {
       if (hasPermission("loads.manage")) tasks.push(refreshLoads());
       if (hasPermission("finance.manage")) tasks.push(refreshFinancial());
       if (hasPermission("production.manage")) tasks.push(refreshProduction());
-      if (hasPermission("users.manage")) tasks.push(refreshUsers());
       const results = await Promise.allSettled(tasks);
       const failure = results.find(result => result.status === "rejected");
       if (failure) throw failure.reason;
+      await refreshVisibleList();
       window.FortyAccess?.apply();
       openLoadQrTarget();
       $("#syncStatus").textContent = `Atualizado às ${new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}`;
@@ -2027,6 +2007,7 @@ async function refreshAll() {
 }
 
 async function init() {
+  wireListPagination();
   window.addEventListener('hashchange', () => {
     if (accessToken) refreshAll().catch(error => toast(error.message));
   });

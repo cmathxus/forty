@@ -260,6 +260,29 @@ public sealed class DeliveryLoadsController(AppDbContext dbContext) : Controller
         return Ok(await LoadById(loadId, cancellationToken));
     }
 
+    [HttpPost("{id:guid}/return")]
+    public async Task<IActionResult> RecordReturn(Guid id, RecordLoadReturnRequest request, CancellationToken ct)
+    {
+        var inventory = new InventoryService(dbContext);
+        await using var transaction = await inventory.BeginWriteAsync(ct);
+        var load = await dbContext.DeliveryLoads.SingleOrDefaultAsync(x => x.Id == id, ct);
+        if (load is null) return NotFound();
+        if (load.Status is not (LoadStatus.Dispatched or LoadStatus.Closed))
+            return Conflict(new { detail = "Registre a saída da carga antes de informar o retorno." });
+        if (load.ReturnedAt is not null)
+            return Conflict(new { detail = "O retorno desta carga já foi registrado." });
+        var now = DateTimeOffset.UtcNow;
+        if (request.ReturnedAt is null || request.ReturnedAt > now ||
+            (load.DispatchedAt is not null && request.ReturnedAt < load.DispatchedAt))
+            return BadRequest(new { detail = "Informe o retorno entre o horário de saída da carga e o momento atual." });
+        load.ReturnedAt = request.ReturnedAt.Value.ToUniversalTime();
+        load.ReturnRecordedAt = now;
+        load.ReturnRecordedBy = User?.Identity?.Name ?? "Sistema";
+        await dbContext.SaveChangesAsync(ct);
+        if (transaction is not null) await transaction.CommitAsync(ct);
+        return NoContent();
+    }
+
     [HttpPost("{id:guid}/dispatch")]
     public async Task<IActionResult> Dispatch(Guid id, CancellationToken cancellationToken)
     {

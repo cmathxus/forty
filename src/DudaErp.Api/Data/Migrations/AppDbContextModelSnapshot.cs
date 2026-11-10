@@ -305,6 +305,15 @@ namespace DudaErp.Api.Data.Migrations
                     b.Property<Guid>("RegionId")
                         .HasColumnType("uuid");
 
+                    b.Property<DateTimeOffset?>("ReturnRecordedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("ReturnRecordedBy")
+                        .HasColumnType("text");
+
+                    b.Property<DateTimeOffset?>("ReturnedAt")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<DateOnly>("ScheduledDate")
                         .HasColumnType("date");
 

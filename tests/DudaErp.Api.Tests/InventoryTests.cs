@@ -22,8 +22,13 @@ public sealed class InventoryTests
         Assert.IsType<OkObjectResult>(await inventory.Record(new(Guid.NewGuid(), product.Id, StockMovementKind.Count, 15, "Contagem inicial"), default));
         var controller = new DeliveryLoadsController(db) { ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext {
             User = new ClaimsPrincipal(new ClaimsIdentity([new Claim(ClaimTypes.Name, "Conferente QA")], "Bearer")) } } };
+        Assert.IsType<ConflictObjectResult>(await controller.RecordReturn(load.Id, new(DateTimeOffset.UtcNow), default));
         Assert.IsType<NoContentResult>(await controller.Dispatch(load.Id, default));
         Assert.Equal("Conferente QA", load.DispatchedBy); Assert.NotNull(load.DispatchedAt);
+        var actualReturn = DateTimeOffset.UtcNow;
+        Assert.IsType<BadRequestObjectResult>(await controller.RecordReturn(load.Id, new(null), default));
+        Assert.IsType<BadRequestObjectResult>(await controller.RecordReturn(load.Id, new(actualReturn.AddDays(1)), default));
+        Assert.IsType<BadRequestObjectResult>(await controller.RecordReturn(load.Id, new(load.DispatchedAt.Value.AddMinutes(-1)), default));
         var item = order.Items.Single();
         Assert.IsType<BadRequestObjectResult>((await controller.CloseOrder(load.Id, order.Id,
             new(DeliveryStatus.Returned, PaymentMethod.None, 0, "Retorno sem conferência"), default)).Result);
@@ -36,6 +41,14 @@ public sealed class InventoryTests
         Assert.Equal(8, link.ItemResults.Single().ReturnedQuantity); Assert.Equal(2, link.ItemResults.Single().MissingQuantity);
         Assert.Equal(13, await new InventoryService(db).BalanceAsync(product.Id, default));
         Assert.Equal(LoadStatus.Closed, load.Status);
+        Assert.Null(load.ReturnedAt); // A conferência não inventa a hora de chegada.
+        Assert.IsType<NoContentResult>(await controller.RecordReturn(load.Id, new(actualReturn.ToOffset(TimeSpan.FromHours(-3))), default));
+        Assert.Equal(actualReturn, load.ReturnedAt); Assert.Equal(TimeSpan.Zero, load.ReturnedAt.GetValueOrDefault().Offset);
+        Assert.Equal("Conferente QA", load.ReturnRecordedBy); Assert.NotNull(load.ReturnRecordedAt);
+        Assert.True(load.ReturnedAt < link.DeliveredAt);
+        Assert.IsType<ConflictObjectResult>(await controller.RecordReturn(load.Id, new(DateTimeOffset.UtcNow), default));
+        Assert.Equal(actualReturn, load.ReturnedAt);
+        Assert.Equal(13, await new InventoryService(db).BalanceAsync(product.Id, default));
     }
 
     [PostgresFact]

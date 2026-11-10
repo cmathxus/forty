@@ -10,13 +10,66 @@ const productionSource = readFileSync(new URL('../src/DudaErp.Api/wwwroot/produc
 const accessSource = readFileSync(new URL('../src/DudaErp.Api/wwwroot/access.js', import.meta.url), 'utf8');
 const qrSource = readFileSync(new URL('../src/DudaErp.Api/wwwroot/load-qr.js', import.meta.url), 'utf8');
 const qrVendor = readFileSync(new URL('../src/DudaErp.Api/wwwroot/vendor/qrcode-1.4.4.js', import.meta.url), 'utf8');
+const paginationSource = readFileSync(new URL('../src/DudaErp.Api/wwwroot/pagination.js', import.meta.url), 'utf8');
+
+function setupPages() {
+  const ui = setup(); ui.context.URLSearchParams = URLSearchParams;
+  vm.runInContext(paginationSource, ui.context);
+  ui.run(`accessToken='token';state.currentUser={permissions:['customers.manage']};renderPagination=()=>{};
+    renderCustomersList=()=>{window.rendered=listRows('customers').map(row=>row.id)}`);
+  return ui;
+}
+
+test('paginação solicita apenas a página escolhida com busca no backend e preserva o total retornado', async () => {
+  const ui = setupPages();
+  let requested;
+  ui.context.fetchPage = async path => { requested = path; return { items: [{ id: 'servidor', legalName: 'Servidor' }], total: 426, page: 2, totalPages: 22 }; };
+  ui.run(`api=fetchPage;listPage('customers').search='nome & cidade';state.customers=[{id:'cache',legalName:'nome & cidade'}]`);
+  await ui.run(`refreshList('customers',2)`);
+  const url = new URL(requested, 'https://test.invalid');
+  assert.equal(url.searchParams.get('pageSize'), '20'); assert.equal(url.searchParams.get('page'), '2');
+  assert.equal(url.searchParams.get('search'), 'nome & cidade');
+  assert.equal(ui.run(`listCount('customers')`), '21–40 de 426');
+  assert.deepEqual(Array.from(ui.context.window.rendered), ['servidor']); // Não filtra a página nem usa o cache como lista.
+});
+
+test('resposta antiga de busca não sobrescreve a nova e resposta de outra sessão é descartada', async () => {
+  const ui = setupPages(); const requests = [];
+  ui.context.fetchPage = () => new Promise(resolve => requests.push(resolve)); ui.run('api=fetchPage');
+  const old = ui.run(`refreshList('customers',2)`);
+  ui.run(`listPage('customers').search='nova'`);
+  const current = ui.run(`refreshList('customers',1)`);
+  requests[1]({ items: [{ id: 'nova' }], total: 1, page: 1, totalPages: 1 }); await current;
+  requests[0]({ items: [{ id: 'antiga' }], total: 426, page: 2, totalPages: 22 }); await old;
+  assert.equal(ui.run(`listRows('customers')[0].id`), 'nova');
+  const expired = ui.run(`refreshList('customers')`); ui.run(`accessToken='outra-sessao'`);
+  requests[2]({ items: [{ id: 'sessao-anterior' }], total: 1, page: 1, totalPages: 1 }); await expired;
+  assert.equal(ui.run(`listRows('customers')[0].id`), 'nova');
+});
+
+test('digitar busca volta à primeira página e agrupa digitação antes de chamar a API', async () => {
+  const ui = setupPages(); const handlers = {}, pending = new Map(); let timerId = 0, calls = 0;
+  ui.context.setTimeout = callback => { pending.set(++timerId, callback); return timerId; };
+  ui.context.clearTimeout = id => pending.delete(id);
+  for (const key of ['customers','products','sellers','regions','vehicles','users']) {
+    const input = { value: '', setAttribute() {}, addEventListener: (_event, handler) => handlers[key] = handler };
+    ui.elements.set(key === 'users' ? '#userSearch' : `[data-filter='${key}']`, input);
+  }
+  ui.context.fetchPage = async () => { calls++; return { items: [], total: 0, page: 1, totalPages: 1 }; };
+  ui.run(`api=fetchPage;listPage('customers').page=7;wireListPagination()`);
+  const input = ui.elements.get(`[data-filter='customers']`);
+  input.value = 'a'; handlers.customers(); input.value = 'azul'; handlers.customers();
+  assert.equal(calls, 0); assert.equal(pending.size, 1); assert.equal(ui.run(`listPage('customers').page`), 1);
+  await [...pending.values()][0](); assert.equal(calls, 1);
+  assert.equal(ui.run(`listPage('customers').search`), 'azul');
+});
 
 function setupQr(href = 'https://cmathxus.github.io/forty/?secret=discard#old') {
   const ui = setup();
   ui.context.URL = URL;
   ui.context.window.location = new URL(href);
   ui.context.window.history = { replaceState(_state, _title, path) { ui.context.window.location = new URL(path, ui.context.window.location); } };
-  vm.runInContext(qrVendor + '\n' + qrSource, ui.context);
+  vm.runInContext(qrVendor + '\n' + qrSource + '\n' + inventorySource, ui.context);
   ui.run(`renderLoads=()=>{}; showView=view=>{window.openedView=view}; toast=message=>{window.message=message}`);
   return ui;
 }
@@ -84,6 +137,20 @@ test('retorno de entrega não realizada destaca falta sem tratar pedidos pendent
   const check = ui.run(`deliveryCheckSummary([{id:'a',quantity:10,totalAmount:100}], [{orderItemId:'a',deliveredQuantity:'0',returnedQuantity:'8'}])`);
   assert.equal(check.status, 4); assert.equal(check.items[0].missingQuantity, 2); assert.equal(check.deliveredAmount, 0);
   assert(ui.run('reportReconciliation("c").body').includes('Resumo por produto'));
+});
+
+test('registro de chegada abre vazio e distingue retorno físico do horário da conferência', () => {
+  const ui = setup(); vm.runInContext(inventorySource, ui.context);
+  const form = { dataset: {}, elements: { returnDate: { value: '2026-01-01' }, returnTime: { value: '10:00' } },
+    reset() { this.elements.returnDate.value=''; this.elements.returnTime.value=''; } };
+  ui.elements.set('#loadReturnForm', form);
+  ui.run(`state.currentUser={permissions:['loads.manage']};state.loads=[{id:'load',number:42,status:'Dispatched',driverName:'Motorista'}];
+    openEditModal=()=>{};openLoadReturn('load')`);
+  assert.equal(form.elements.returnDate.value, ''); assert.equal(form.elements.returnTime.value, '');
+  assert.equal(form.dataset.loadId, 'load');
+  const details = ui.run(`loadReturnDetails({returnedAt:'2026-11-10T17:30:00Z',returnRecordedAt:'2026-11-10T18:00:00Z',returnRecordedBy:'Operador <QA>'})`);
+  assert.match(details, /Retorno ao depósito/); assert(details.includes('Operador &lt;QA&gt;'));
+  assert.match(ui.run(`loadReturnDetails({})`), /Não registrado/);
 });
 
 test('atalho de entrega não realizada zera entregue e pede contagem física do que voltou', () => {

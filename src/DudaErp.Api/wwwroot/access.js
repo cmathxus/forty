@@ -16,6 +16,7 @@
     editSeller: 'catalog.manage', deleteSeller: 'catalog.manage', editRegion: 'catalog.manage', deleteRegion: 'catalog.manage',
     editVehicle: 'catalog.manage', deleteVehicle: 'catalog.manage', editOrder: 'orders.manage', deleteOrder: 'orders.manage', vale: 'orders.manage',
     editLoad: 'loads.manage', deleteLoad: 'loads.manage', dispatch: 'loads.manage', reconcile: 'loads.manage',
+    loadReturn: 'loads.manage',
     reportLoad: 'loads.manage', reportLoading: 'loads.manage', reportReconciliation: 'loads.manage',
     editPayable: 'finance.manage', deletePayable: 'finance.manage', payPayable: 'finance.manage',
     editReceivable: 'finance.manage', deleteReceivable: 'finance.manage', receiveReceivable: 'finance.manage',
@@ -49,11 +50,12 @@
     document.querySelectorAll('.view').forEach(view => { view.hidden = !canView(view.id); });
   }
   function clear() {
+    clearListPagination();
     qrSelectedLoadId = null;
     state.currentUser = null;
     for (const key of ['regions', 'sellers', 'customers', 'vehicles', 'products', 'orders', 'loads', 'payables', 'receivables', 'productionPlans', 'users']) state[key] = [];
     state.inventory = { items: [], movements: [] }; state.editing = {};
-    document.querySelectorAll('.view .list, #metrics, #dashboardRecentOrders, #dashboardActions, #stockBalances, #stockHistory, #loadOrderChoices, #deliveryCheckItems, #productionPlanRows, #productionCompletionRows, #valeContent, #deliveryCheckContext, #productionCompletionContext, #userPasswordContext').forEach(el => el.replaceChildren());
+    document.querySelectorAll('.view .list, #metrics, #dashboardRecentOrders, #dashboardActions, #stockBalances, #stockHistory, #loadOrderChoices, #deliveryCheckItems, #productionPlanRows, #productionCompletionRows, #valeContent, #deliveryCheckContext, #productionCompletionContext, #userPasswordContext, #loadReturnContext').forEach(el => el.replaceChildren());
     closeVale();
     document.querySelectorAll('form[data-edit-key]').forEach(form => { form.reset(); delete form.dataset.dirty; });
     document.querySelectorAll('select[name="customerId"], select[name="sellerId"], select[name="productId"], select[name="regionId"], select[name="vehicleId"]').forEach(field => {

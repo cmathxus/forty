@@ -20,6 +20,27 @@ namespace DudaErp.Api.Tests;
 
 public sealed class AccessControlTests
 {
+    [Fact]
+    public async Task ListPages_ValidateLimits_AndEnforceSectorPermissions()
+    {
+        await using var factory = new Factory();
+        using var anonymous = factory.CreateClient(new() { BaseAddress = new Uri("https://localhost") });
+        Assert.Equal(HttpStatusCode.Unauthorized, (await anonymous.GetAsync("/api/lists/products")).StatusCode);
+        foreach (var role in AccessRules.Roles)
+        {
+            using var client = await factory.Login(role);
+            Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/api/lists/products")).StatusCode);
+            Assert.Equal(role is AccessRules.Admin or AccessRules.Billing ? HttpStatusCode.OK : HttpStatusCode.Forbidden,
+                (await client.GetAsync("/api/lists/customers")).StatusCode);
+            foreach (var area in new[] { "sellers", "regions", "vehicles", "users" })
+                Assert.Equal(role == AccessRules.Admin ? HttpStatusCode.OK : HttpStatusCode.Forbidden,
+                    (await client.GetAsync($"/api/lists/{area}")).StatusCode);
+        }
+        using var admin = await factory.Login(AccessRules.Admin);
+        foreach (var query in new[] { "page=0", "page=-1", "page=1000001", "pageSize=200", "pageSize=0", "search=" + new string('a', 201) })
+            Assert.Equal(HttpStatusCode.BadRequest, (await admin.GetAsync("/api/lists/products?" + query)).StatusCode);
+    }
+
     [PostgresFact]
     public async Task ConcurrentAdminChanges_KeepAtLeastOneAdministrator()
     {

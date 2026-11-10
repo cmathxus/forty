@@ -50,6 +50,9 @@ public sealed class DeliveryLoad : Entity
     public bool InventoryTracked { get; set; }
     public DateTimeOffset? DispatchedAt { get; set; }
     public string? DispatchedBy { get; set; }
+    public DateTimeOffset? ReturnedAt { get; set; }
+    public DateTimeOffset? ReturnRecordedAt { get; set; }
+    public string? ReturnRecordedBy { get; set; }
     public string? Notes { get; set; }
     public List<DeliveryLoadOrder> Orders { get; set; } = [];
 }

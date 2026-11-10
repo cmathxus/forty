@@ -143,7 +143,31 @@ function openDeliveryCheck(value) {
   openEditModal(form, 'Conferir entrega e retorno');
 }
 
+function loadReturnDetails(load) {
+  return `<p class="meta"><strong>Retorno ao depósito:</strong> ${load.returnedAt ? checkedDateTime(load.returnedAt) : 'Não registrado'}${load.returnedAt ? `<br>Registrado por ${escapeHtml(load.returnRecordedBy || 'Não registrado')} em ${checkedDateTime(load.returnRecordedAt)}` : ''}</p>`;
+}
+
+function openLoadReturn(id) {
+  if (!hasPermission('loads.manage')) return;
+  const load = state.loads.find(x => x.id === id);
+  if (!load || !['Dispatched', 'Closed'].includes(load.status) || load.returnedAt) return toast('Esta carga não está disponível para registrar retorno.');
+  const form = $('#loadReturnForm');
+  if (form.dataset.dirty === 'true' && !confirm('Descartar o retorno em preenchimento?')) return;
+  form.reset(); delete form.dataset.dirty; form.dataset.loadId = id;
+  $('#loadReturnContext').textContent = `Carga ${load.number} · ${load.driverName || 'Motorista não informado'} · ${load.vehicle?.plate || 'Sem veículo'}`;
+  window.FortyControls?.sync(form);
+  openEditModal(form, 'Registrar retorno da carga');
+}
+
 function wireInventory() {
+  $('#loadReturnForm').addEventListener('submit', event => {
+    event.preventDefault();
+    const form = event.currentTarget;
+    if (!form.reportValidity() || !confirm('Confirmar a data e o horário de chegada desta carga ao depósito?')) return;
+    submitJson(form, `/api/delivery-loads/${form.dataset.loadId}/return`, () => ({
+      returnedAt: new Date(`${form.elements.returnDate.value}T${form.elements.returnTime.value}`).toISOString()
+    }));
+  });
   $('#loadMissingOnly').addEventListener('change', renderLoads);
   $('#stockSearch').addEventListener('input', renderInventory);
   $('#stockForm').addEventListener('change', updateStockHint);
@@ -186,7 +210,7 @@ function reportReconciliation(id) {
       <td>${result ? stockQuantity(result.returnedQuantity) : '—'}</td><td>${result ? stockQuantity(result.missingQuantity) : '—'}</td>
       <td>${result ? escapeHtml(link.deliveryNotes || 'Conferido') : link.deliveryStatus === 'Pending' ? 'A conferir' : 'Histórico sem conferência'}</td><td>${result ? escapeHtml(link.checkedBy || 'Não registrado') : '—'}</td><td>${result ? checkedDateTime(link.deliveredAt) : '—'}</td></tr>`;
   }));
-  return { title: `Conferência da carga ${load.number}`, body: `<p>Motorista: ${escapeHtml(load.driverName || 'Não informado')} · Veículo: ${escapeHtml(load.vehicle?.plate || 'Não informado')} · Região: ${escapeHtml(load.region?.name || 'Não informada')}</p><p>Saída registrada por ${escapeHtml(load.dispatchedBy || 'Não registrado')} · ${checkedDateTime(load.dispatchedAt)}</p>
+  return { title: `Conferência da carga ${load.number}`, body: `<p>Motorista: ${escapeHtml(load.driverName || 'Não informado')} · Veículo: ${escapeHtml(load.vehicle?.plate || 'Não informado')} · Região: ${escapeHtml(load.region?.name || 'Não informada')}</p><p>Saída registrada por ${escapeHtml(load.dispatchedBy || 'Não registrado')} · ${checkedDateTime(load.dispatchedAt)}</p>${loadReturnDetails(load)}
     <p>Voltou significa retorno físico ao depósito. Faltante = saída − entregue − voltou. As quantidades respeitam a unidade de cada produto.</p><h2>Resumo por produto</h2>${renderLoadProductTable(load)}<h2>Conferência por pedido</h2>
     <table><thead><tr><th>Pedido</th><th>Cliente</th><th>Produto</th><th>Unidade</th><th>Saída</th><th>Entregue</th><th>Voltou</th><th>Faltante</th><th>Observação</th><th>Conferido por</th><th>Data da conferência</th></tr></thead><tbody>${rows.join('')}</tbody></table>` };
 }

@@ -540,3 +540,7 @@ body:has(#editModal.open), body:has(.profile-drawer[open]) { overflow: hidden; }
 }
 .qr-load-context { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px; padding: 20px; border: 1px solid var(--line); border-radius: 12px; margin-bottom: 16px; }
 .qr-load-context p { margin: 6px 0 0; }
+.list-pagination { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px; padding-top: 20px; margin-top: 20px; border-top: 1px solid var(--line); color: var(--muted); font-size: 13px; }
+.list-pagination > div { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; }
+.list-pagination button { min-height: 40px; padding: 10px 16px; }
+.list[aria-busy="true"] { opacity: .55; pointer-events: none; }

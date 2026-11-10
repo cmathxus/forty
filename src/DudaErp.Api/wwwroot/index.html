@@ -527,6 +527,10 @@
 <form id="stockForm" class="panel">
 <fieldset class="form-section"><legend>Movimentação</legend><div class="form-section-fields"><label class="wide">Produto<select name="productId" required></select></label><label class="wide">Tipo<select name="kind" required><option value="">Selecione tipo</option><option value="Production">Produção de produtos acabados</option><option value="Receipt">Entrada de produtos</option><option value="Count">Contagem física / ajustar saldo</option></select></label><label id="stockProductionDate" class="wide" hidden>Data de produção<input name="productionDate" type="date" disabled></label><p id="stockFormHint" class="wide field-hint"></p><label class="wide">Quantidade<input name="quantity" type="number" min="0" max="999999999999" step="0.001" required placeholder="Informe a quantidade"></label><label class="wide">Motivo / documento<input name="reason" minlength="3" maxlength="500" placeholder="Ex.: produção do turno, lote, compra / nota ou contagem inicial" required></label></div></fieldset>
 <div class="form-actions wide"><button type="button" data-cancel-edit="stock">Cancelar</button><button class="primary" type="submit">Registrar movimento</button></div></form>
+<form id="loadReturnForm" class="panel">
+<p id="loadReturnContext" class="wide"></p>
+<fieldset class="form-section"><legend>Chegada ao depósito</legend><div class="form-section-fields"><label>Data do retorno<input name="returnDate" type="date" required></label><label>Horário do retorno<input name="returnTime" type="time" step="1" required></label><p class="wide field-hint">Informe quando o caminhão chegou, no horário local deste dispositivo. Este registro não dá baixa nos produtos; a conferência é feita separadamente.</p></div></fieldset>
+<div class="form-actions wide"><button type="button" data-cancel-edit="loadReturn">Cancelar</button><button type="submit" class="primary">Registrar retorno</button></div></form>
 <form id="deliveryCheckForm" class="panel">
 <p id="deliveryCheckContext" class="wide"></p><p id="deliveryLegacyHint" class="wide inventory-notice">Carga anterior ao controle de estoque: a conferência será registrada, sem alterar o saldo retroativamente.</p>
 <div class="wide"><h4 class="form-section-title">Conferência física dos produtos</h4><p>Informe a quantidade entregue ao cliente e a que voltou fisicamente ao depósito. A diferença aparece como faltante.</p><div class="card-actions"><button type="button" data-check-preset="notDelivered">Entrega não realizada — informar o que voltou</button><button type="button" data-check-preset="delivered">Tudo entregue</button><button type="button" data-check-preset="returned">Tudo devolvido</button></div></div>
@@ -662,6 +666,7 @@
   <script src="controls.js"></script>
   <script src="vendor/qrcode-1.4.4.js"></script>
   <script src="load-qr.js"></script>
+  <script src="pagination.js"></script>
   <script src="inventory.js"></script>
   <script src="production.js"></script>
   <script src="access.js"></script>

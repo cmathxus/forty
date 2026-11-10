@@ -77,6 +77,8 @@ public sealed record CreateDeliveryLoadRequest(
 
 public sealed record AddOrdersToLoadRequest([MinLength(1)] IReadOnlyCollection<Guid> OrderIds);
 
+public sealed record RecordLoadReturnRequest([Required] DateTimeOffset? ReturnedAt);
+
 public sealed record UpdateDeliveryLoadRequest(
     DateOnly ScheduledDate,
     Guid RegionId,
