@@ -122,13 +122,13 @@ function fillDeliveryPreset(preset) {
   if (preset === 'notDelivered') $('[name=returnedQuantity]', form)?.focus();
 }
 
-function openDeliveryCheck(value) {
+async function openDeliveryCheck(value) {
   const [loadId, orderId] = value.split(':');
   const load = state.loads.find(x => x.id === loadId);
   const link = load?.orders.find(x => x.orderId === orderId);
   if (!link || load.status !== 'Dispatched' || link.deliveryStatus !== 'Pending') return toast('Este pedido não está disponível para conferência.');
   const form = $('#deliveryCheckForm');
-  if (form.dataset.dirty === 'true' && !confirm('Descartar a conferência em preenchimento?')) return;
+  if (form.dataset.dirty === 'true' && !(await askConfirmation('Descartar a conferência em preenchimento?', { title: 'Descartar conferência?', accept: 'Descartar', cancel: 'Continuar editando', destructive: true }))) return;
   form.reset(); delete form.dataset.dirty;
   form.dataset.loadId = loadId; form.dataset.orderId = orderId;
   $('#deliveryCheckContext').textContent = `Carga ${load.number} · Pedido ${link.order.number} · ${link.order.customer?.legalName || 'Cliente'}`;
@@ -147,12 +147,12 @@ function loadReturnDetails(load) {
   return `<p class="meta"><strong>Retorno ao depósito:</strong> ${load.returnedAt ? checkedDateTime(load.returnedAt) : 'Não registrado'}${load.returnedAt ? `<br>Registrado por ${escapeHtml(load.returnRecordedBy || 'Não registrado')} em ${checkedDateTime(load.returnRecordedAt)}` : ''}</p>`;
 }
 
-function openLoadReturn(id) {
+async function openLoadReturn(id) {
   if (!hasPermission('loads.manage')) return;
   const load = state.loads.find(x => x.id === id);
   if (!load || !['Dispatched', 'Closed'].includes(load.status) || load.returnedAt) return toast('Esta carga não está disponível para registrar retorno.');
   const form = $('#loadReturnForm');
-  if (form.dataset.dirty === 'true' && !confirm('Descartar o retorno em preenchimento?')) return;
+  if (form.dataset.dirty === 'true' && !(await askConfirmation('Descartar o retorno em preenchimento?', { title: 'Descartar alterações?', accept: 'Descartar', cancel: 'Continuar editando', destructive: true }))) return;
   form.reset(); delete form.dataset.dirty; form.dataset.loadId = id;
   $('#loadReturnContext').textContent = `Carga ${load.number} · ${load.driverName || 'Motorista não informado'} · ${load.vehicle?.plate || 'Sem veículo'}`;
   window.FortyControls?.sync(form);
@@ -160,10 +160,12 @@ function openLoadReturn(id) {
 }
 
 function wireInventory() {
-  $('#loadReturnForm').addEventListener('submit', event => {
+  $('#loadReturnForm').addEventListener('submit', async event => {
     event.preventDefault();
     const form = event.currentTarget;
-    if (!form.reportValidity() || !confirm('Confirmar a data e o horário de chegada desta carga ao depósito?')) return;
+    if (!form.reportValidity()) return;
+    const load = state.loads.find(item => item.id === form.dataset.loadId);
+    if (!(await askConfirmation(`Registrar a chegada da carga ${load?.number || ''} ao depósito em ${dateBR(form.elements.returnDate.value)} às ${form.elements.returnTime.value}?`, { title: 'Registrar retorno da carga', accept: 'Registrar retorno' }))) return;
     submitJson(form, `/api/delivery-loads/${form.dataset.loadId}/return`, () => ({
       returnedAt: new Date(`${form.elements.returnDate.value}T${form.elements.returnTime.value}`).toISOString()
     }));
@@ -185,7 +187,7 @@ function wireInventory() {
     if (!summary?.complete) return toast('Confira as quantidades de todos os produtos.');
     const { form, load, link } = activeDeliveryCheck();
     if (!form.reportValidity() || form.dataset.saving === 'true') return;
-    if (!confirm(`Registrar a conferência do pedido ${link.order.number}?${summary.missing ? ' Há produtos faltantes.' : ''} A baixa não poderá ser repetida.`)) return;
+    if (!(await askConfirmation(`Registrar a conferência do pedido ${link.order.number}?${summary.missing ? ' Há produtos faltantes.' : ''} A baixa não poderá ser repetida.`, { title: 'Confirmar conferência', accept: 'Registrar conferência' }))) return;
     form.dataset.saving = 'true';
     const button = $('button[type=submit]', form); button.disabled = true;
     try {

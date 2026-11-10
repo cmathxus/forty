@@ -2,16 +2,16 @@
 @font-face { font-family: 'Barlow'; src: url('fonts/barlow-bold.woff2') format('woff2'); font-weight: 700; font-style: normal; font-display: swap; }
 :root { color-scheme: light; font-family: 'Plex', sans-serif; font-size: 14px; --bg: #eff1f7; --panel: #fff; --panel-soft: #f6f7fb; --line: #dce1ec; --text: #242b49; --muted: #606a82; --brand: #354bd1; --brand-dark: #283aa9; --brand-soft: #eef0ff; --ink: #20274c; --orange: #ff9a52; --blue: #354bd1; --amber: #99600b; --red: #b33d4b; --green: #277260; }
 * { box-sizing: border-box; }
-:root { --scroll-thumb: #a1abc3; --scroll-thumb-hover: #6f7fba; --scroll-thumb-active: #354bd1; }
+:root { --scroll-thumb: #c0c7d8; --scroll-thumb-hover: #929fbc; --scroll-thumb-active: #6576b5; }
 * { scrollbar-width: thin; scrollbar-color: var(--scroll-thumb) transparent; }
 html { scrollbar-gutter: stable; }
 .modal-card, .compact-list, .notification-list, .profile-drawer { scrollbar-gutter: stable; }
 /* Chromium e Safari: a borda transparente dá respiro ao indicador. */
 @supports selector(::-webkit-scrollbar) {
   * { scrollbar-width: auto; scrollbar-color: auto; }
-  ::-webkit-scrollbar { width: 10px; height: 10px; }
-  ::-webkit-scrollbar-track { background: transparent; }
-  ::-webkit-scrollbar-thumb { min-height: 36px; border: 3px solid transparent; border-radius: 999px; background: var(--scroll-thumb); background-clip: padding-box; }
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-track { background: #20274c04; border-radius: 999px; margin-block: 8px; }
+  ::-webkit-scrollbar-thumb { min-height: 40px; border: 2px solid transparent; border-radius: 999px; background: var(--scroll-thumb); background-clip: padding-box; }
   ::-webkit-scrollbar-thumb:hover { background-color: var(--scroll-thumb-hover); }
   ::-webkit-scrollbar-thumb:active { background-color: var(--scroll-thumb-active); }
   ::-webkit-scrollbar-corner { background: transparent; }

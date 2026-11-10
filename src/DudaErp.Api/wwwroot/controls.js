@@ -35,6 +35,7 @@
       selectOnTab: false,
       placeholder: 'Selecione…',
       hideSelected: false,
+      dropdownParent: controlOverlayRoot(),
       render: {
         no_results: () => '<div class="no-results">Nenhum resultado encontrado.</div>',
         option: (data, escape) => `<div class="option"><span>${escape(data.text)}</span><span class="option-check" aria-hidden="true">✓</span></div>`
@@ -43,6 +44,13 @@
     if (searchable) settings.plugins = ['dropdown_input'];
     else settings.controlInput = null;
     const control = new TomSelect(field, settings);
+    control.dropdown.classList.add('forty-floating-menu');
+    control.positionDropdown = () => {
+      const headerHeight = control.dropdown.querySelector('.dropdown-input-wrap')?.offsetHeight || 0;
+      const height = Math.min(330, (control.dropdown_content.scrollHeight || 245) + headerHeight + 18);
+      const placement = placeControlPopup(control.dropdown, control.control, control.control.getBoundingClientRect().width, height);
+      control.dropdown_content.style.maxHeight = `${Math.max(0, placement.maxHeight - headerHeight - 18)}px`;
+    };
     field.setAttribute('aria-hidden', 'true');
     control.control.setAttribute('aria-label', label);
     if (control.control_input) {
@@ -53,6 +61,7 @@
     control.on('dropdown_open', () => {
       selects.forEach(other => { if (other !== field) other.tomselect?.close(); });
       dates.forEach(other => other._flatpickr?.close());
+      requestAnimationFrame(() => { if (control.isOpen) control.positionDropdown(); });
     });
     selects.add(field);
   }
@@ -86,10 +95,12 @@
       altInputClass: 'forty-date-input',
       allowInput: true,
       disableMobile: true,
-      static: true,
+      static: false,
+      appendTo: controlOverlayRoot(),
       monthSelectorType: 'static',
       onChange: (_, __, instance) => instance.altInput.setCustomValidity(''),
       onReady: (_, __, instance) => {
+        instance.calendarContainer.classList.add('forty-floating-calendar');
         instance.altInput.placeholder = 'dd/mm/aaaa';
         instance.altInput.setAttribute('aria-label', label);
         instance.altInput.setAttribute('inputmode', 'numeric');
@@ -117,11 +128,9 @@
       onOpen: (_, __, instance) => {
         selects.forEach(other => other.tomselect?.close());
         dates.forEach(other => { if (other !== field) other._flatpickr?.close(); });
-        const rect = instance.altInput.getBoundingClientRect();
-        const width = Math.min(308, window.innerWidth - 32);
-        const shift = Math.min(0, window.innerWidth - 16 - rect.left - width);
-        instance.calendarContainer.style.marginLeft = `${shift}px`;
-        instance.calendarContainer.classList.toggle('calendar-above', window.innerHeight - rect.bottom < 355 && rect.top > 355);
+        requestAnimationFrame(() => {
+          if (instance.isOpen) placeControlPopup(instance.calendarContainer, instance.altInput, 308, instance.calendarContainer.scrollHeight || 370);
+        });
       }
     });
     field.dataset.dateEnhanced = 'true';
@@ -141,13 +150,13 @@
     picker.altInput.addEventListener('keydown', event => {
       if (event.key === 'Enter') checkTypedDate(event);
     }, true);
-    // O calendário estático acompanha o campo quando o formulário vai para o modal.
     picker.altInput.addEventListener('keydown', event => {
       if (event.key === 'ArrowDown') { event.preventDefault(); picker.open(); }
     });
   }
 
   function enhance(root = document) {
+    window.FortyTime?.enhance(root);
     const fields = [];
     if (root.matches?.('select, input[type="date"]')) fields.push(root);
     fields.push(...root.querySelectorAll('select, input[type="date"]'));
@@ -162,17 +171,33 @@
   function closeAll() {
     selects.forEach(field => field.tomselect?.close());
     dates.forEach(field => field._flatpickr?.close());
+    window.FortyTime?.close();
   }
 
   function isOpen() {
-    return [...selects].some(field => field.tomselect?.isOpen) || [...dates].some(field => field._flatpickr?.isOpen);
+    return [...selects].some(field => field.tomselect?.isOpen) || [...dates].some(field => field._flatpickr?.isOpen) || window.FortyTime?.isOpen();
+  }
+
+  function repositionAll() {
+    selects.forEach(field => { if (field.tomselect?.isOpen) field.tomselect.positionDropdown(); });
+    dates.forEach(field => {
+      const picker = field._flatpickr;
+      if (picker?.isOpen) placeControlPopup(picker.calendarContainer, picker.altInput, 308, picker.calendarContainer.scrollHeight || 370);
+    });
   }
 
   function init() {
     if (started) return;
     started = true;
     enhance();
-    window.addEventListener('resize', closeAll);
+    window.addEventListener('resize', repositionAll);
+    window.visualViewport?.addEventListener('resize', repositionAll);
+    document.addEventListener('scroll', event => {
+      if (!controlOverlayRoot().contains(event.target)) {
+        selects.forEach(field => field.tomselect?.close());
+        dates.forEach(field => field._flatpickr?.close());
+      }
+    }, true);
     document.addEventListener('reset', event => queueMicrotask(() => sync(event.target)));
     document.addEventListener('keydown', event => {
       if (event.key === 'Escape' && isOpen()) {

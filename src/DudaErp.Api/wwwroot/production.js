@@ -30,11 +30,11 @@ function addProductionPlanRow() {
   $('#productionPlanRows').append(row);
 }
 
-function openProductionCompletion(id) {
+async function openProductionCompletion(id) {
   const plan = state.productionPlans.find(x => x.id === id);
   if (!plan || plan.status !== 'Planned') return toast('Esta programação não está disponível para conclusão.');
   const form = $('#productionCompletionForm');
-  if (form.dataset.dirty === 'true' && !confirm('Descartar a confirmação em preenchimento?')) return;
+  if (form.dataset.dirty === 'true' && !(await askConfirmation('Descartar a confirmação em preenchimento?', { title: 'Descartar alterações?', accept: 'Descartar', cancel: 'Continuar editando', destructive: true }))) return;
   form.reset(); delete form.dataset.dirty; form.dataset.planId = id;
   $('#productionCompletionContext').textContent = `Programação ${plan.number} · Prevista para ${dateBR(plan.scheduledDate)}. Informe o que realmente foi produzido; somente essa quantidade entra no estoque.`;
   $('#productionCompletionRows').innerHTML = plan.items.map(item => `<div class="production-item-row" data-product-id="${item.productId}"><div><strong>${escapeHtml(item.productCode)} — ${escapeHtml(item.productName)}</strong><p class="meta">Planejado: ${stockQuantity(item.plannedQuantity)} ${escapeHtml(item.unit)}</p></div><label>Produzido (${escapeHtml(item.unit)})<input name="producedQuantity" type="number" min="0" max="999999999999" step="0.001" placeholder="Quantidade real" required></label></div>`).join('');
@@ -43,7 +43,7 @@ function openProductionCompletion(id) {
 }
 
 async function cancelProductionPlan(id) {
-  if (!confirm('Cancelar esta programação de produção? O estoque não será alterado.')) return;
+  if (!(await askConfirmation('Cancelar esta programação de produção? O estoque não será alterado.', { title: 'Cancelar programação', accept: 'Cancelar programação', cancel: 'Manter programação', destructive: true }))) return;
   try { await api(`/api/production/${id}/cancel`, { method: 'POST' }); toast('Programação cancelada.'); await refreshProduction(); }
   catch (error) { toast(error.message); }
 }
@@ -66,7 +66,7 @@ function wireProduction() {
     const items = $$('.production-item-row', form).map(row => ({ productId: row.dataset.productId,
       quantity: Number($("input[name='producedQuantity']", row).value) }));
     if (!items.some(x => x.quantity > 0)) return toast('Informe uma quantidade produzida. Se nada foi produzido, cancele a programação.');
-    if (!confirm('Concluir a programação e adicionar as quantidades produzidas ao estoque? Confira os valores: esta confirmação não pode ser repetida.')) return;
+    if (!(await askConfirmation('Concluir a programação e adicionar as quantidades produzidas ao estoque? Confira os valores: esta confirmação não pode ser repetida.', { title: 'Confirmar produção', accept: 'Confirmar produção' }))) return;
     form.dataset.saving = 'true'; const button = $('button[type=submit]', form); button.disabled = true;
     try {
       await api(`/api/production/${form.dataset.planId}/complete`, { method: 'POST', body: JSON.stringify({ productionDate: form.elements.productionDate.value, items }) });

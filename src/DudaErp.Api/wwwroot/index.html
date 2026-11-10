@@ -641,6 +641,21 @@
     </div>
   </div>
 
+  <dialog id="timePickerDialog" class="forty-dialog clock-dialog" aria-labelledby="clockTitle" aria-describedby="clockHelp">
+    <div class="dialog-heading"><h2 id="clockTitle">Escolher horário</h2><form method="dialog"><button class="icon-button" aria-label="Fechar relógio" value="cancel"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"></path></svg></button></form></div>
+    <p class="clock-subtitle">Formato de 24 horas</p>
+    <div class="clock-digital"><div><button type="button" data-clock-mode="hour" aria-pressed="true">Horas</button><input id="clockHour" aria-label="Horas" inputmode="numeric" maxlength="2" placeholder="––" autocomplete="off"></div><span aria-hidden="true">:</span><div><button type="button" data-clock-mode="minute" aria-pressed="false">Minutos</button><input id="clockMinute" aria-label="Minutos" inputmode="numeric" maxlength="2" placeholder="––" autocomplete="off"></div></div>
+    <div id="clockFace" class="clock-face" role="group" aria-label="Relógio: selecione a hora ou os minutos"><span id="clockHand" class="clock-hand" aria-hidden="true" hidden></span><div id="clockNumbers"></div><span class="clock-pin" aria-hidden="true"></span></div>
+    <p id="clockHelp" class="clock-help"></p><p id="clockError" class="clock-error" role="alert"></p>
+    <div class="dialog-buttons"><form method="dialog"><button value="cancel">Cancelar</button></form><button id="clockUse" type="button" class="primary">Usar horário</button></div>
+  </dialog>
+  <dialog id="confirmationDialog" class="forty-dialog confirmation-dialog" aria-labelledby="confirmationTitle" aria-describedby="confirmationMessage">
+    <form method="dialog">
+      <div class="dialog-heading"><h2 id="confirmationTitle">Confirmar ação</h2><button class="icon-button" value="cancel" aria-label="Fechar confirmação" formnovalidate><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"></path></svg></button></div>
+      <p id="confirmationMessage"></p>
+      <div class="dialog-buttons"><button id="confirmationCancel" value="cancel" formnovalidate>Cancelar</button><button id="confirmationAccept" class="primary" value="accept">Confirmar</button></div>
+    </form>
+  </dialog>
   <div id="toast" role="status" aria-live="polite"></div>
   <dialog id="profileDialog" class="profile-drawer" aria-labelledby="profileTitle">
     <div class="profile-drawer-header"><h2 id="profileTitle">Meu perfil</h2><button id="closeProfile" class="icon-button" type="button" aria-label="Fechar perfil"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"></path></svg></button></div>
@@ -663,6 +678,9 @@
   <script src="vendor/tom-select.complete.min.js"></script>
   <script src="vendor/flatpickr.min.js"></script>
   <script src="vendor/flatpickr-pt.js"></script>
+  <script src="overlays.js"></script>
+  <script src="dialogs.js"></script>
+  <script src="time-picker.js"></script>
   <script src="controls.js"></script>
   <script src="vendor/qrcode-1.4.4.js"></script>
   <script src="load-qr.js"></script>

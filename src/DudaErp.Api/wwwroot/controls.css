@@ -1,4 +1,53 @@
 /* Seleção e datas: superfícies, foco e cores da identidade FORTY. */
+#controlOverlayRoot { position: fixed; inset: 0; z-index: 100; pointer-events: none; }
+#controlOverlayRoot > * { pointer-events: auto; }
+.ts-dropdown.forty-floating-menu, .flatpickr-calendar.forty-floating-calendar {
+  position: fixed !important; left: var(--popup-left, 12px) !important; top: var(--popup-top, 12px) !important;
+  width: var(--popup-width, 308px) !important; max-height: var(--popup-height, calc(100dvh - 24px));
+  bottom: auto !important; right: auto !important; margin: 0 !important; z-index: 101;
+  animation: control-fade-in .12s ease-out !important;
+}
+.flatpickr-calendar.forty-floating-calendar { overflow: auto; overscroll-behavior: contain; }
+.forty-floating-menu .ts-dropdown-content { overscroll-behavior: contain; }
+.forty-time-control { position: relative; display: block; width: 100%; }
+.forty-time-control input { width: 100%; padding-right: 48px; font-variant-numeric: tabular-nums; }
+.time-trigger { position: absolute; right: 5px; top: 50%; transform: translateY(-50%); width: 34px; min-height: 34px; padding: 7px; border: 0; background: transparent; color: var(--muted); border-radius: 5px; }
+.time-trigger:active:not(:disabled) { transform: translateY(-50%); }
+.time-trigger:hover { color: var(--brand); background: var(--brand-soft); }
+.time-trigger svg { width: 19px; height: 19px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; }
+.forty-dialog { border: 1px solid var(--line); border-top: 3px solid var(--brand); border-radius: 14px; color: var(--text); background: #fff; padding: 24px; max-width: calc(100vw - 24px); max-height: calc(100dvh - 24px); overflow: auto; box-shadow: 0 24px 80px #171d3f30; }
+.forty-dialog::backdrop { background: #171d3f70; }
+.forty-dialog[open] { animation: control-fade-in .15s ease-out; }
+.forty-dialog .dialog-heading h2 { font-size: 20px; letter-spacing: -.02em; }
+.forty-dialog .icon-button { flex-shrink: 0; }
+.forty-dialog .dialog-buttons { display: flex; align-items: center; justify-content: flex-end; gap: 10px; padding-top: 20px; margin-top: 20px; border-top: 1px solid var(--line); }
+.forty-dialog form { display: block; padding: 0; margin: 0; border: 0; background: transparent; }
+.confirmation-dialog { width: 440px; }
+.confirmation-dialog #confirmationMessage { margin-top: 20px; line-height: 1.65; white-space: pre-line; }
+.confirmation-dialog .destructive { background: var(--red); border-color: var(--red); }
+.confirmation-dialog .destructive:hover { background: #96313e; }
+.clock-dialog { width: 370px; }
+.clock-subtitle { margin-top: 5px; font-size: 12px; }
+.clock-digital { display: flex; justify-content: center; align-items: center; gap: 12px; margin: 18px 0; }
+.clock-digital > div { display: grid; gap: 6px; width: 80px; }
+.clock-digital > span { padding-top: 24px; font-size: 28px; color: var(--muted); }
+.clock-digital button { border: 0; background: transparent; min-height: 24px; padding: 0 8px; font-size: 12px; color: var(--muted); }
+.clock-digital button[aria-pressed="true"] { color: var(--brand); font-weight: 600; }
+.clock-digital input { min-width: 0; height: 60px; padding: 4px; text-align: center; font-size: 30px; font-weight: 500; font-variant-numeric: tabular-nums; border: 1px solid #e1e5f0; background: #f3f5fc; border-radius: 10px; }
+.clock-face { position: relative; width: min(260px, 100%); aspect-ratio: 1; margin: 0 auto; background: #f2f4fa; border: 1px solid #e8ebf3; border-radius: 50%; touch-action: none; user-select: none; }
+.clock-face button { position: absolute; z-index: 2; display: grid; place-items: center; width: 32px; height: 32px; min-height: 32px; padding: 0; border: 0; border-radius: 50%; background: transparent; color: #46516d; font-size: 12px; font-variant-numeric: tabular-nums; transform: translate(-50%, -50%); }
+.clock-face button:active:not(:disabled) { transform: translate(-50%, -50%); }
+.clock-face button:hover { background: #e1e6f7; }
+.clock-face button.selected { background: var(--brand); color: #fff; }
+.clock-face button:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+.clock-hand { position: absolute; left: 50%; top: 50%; height: 2px; width: var(--hand-length, 42%); transform: rotate(calc(var(--hand-angle, 0deg) - 90deg)); transform-origin: 0 50%; background: var(--brand); pointer-events: none; }
+.clock-hand::after { content: ''; position: absolute; width: 30px; height: 30px; right: -15px; top: -14px; background: var(--brand); border-radius: 50%; }
+.clock-pin { position: absolute; top: 50%; left: 50%; width: 8px; height: 8px; background: var(--brand); border-radius: 50%; transform: translate(-50%, -50%); pointer-events: none; }
+.clock-help { text-align: center; font-size: 11px; min-height: 32px; margin-top: 14px; }
+.clock-error { color: var(--red); font-size: 12px; }
+.clock-error:empty { display: none; }
+body:has(.forty-dialog[open]) { overflow: hidden; }
+@keyframes control-fade-in { from { opacity: 0; } to { opacity: 1; } }
 .ts-wrapper { width: 100%; min-width: 0; font: inherit; margin: 0; }
 .ts-wrapper.single .ts-control {
   min-height: 41px; padding: 9px 36px 9px 12px; border: 1px solid #cfd5e3;

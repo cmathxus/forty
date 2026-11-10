@@ -809,14 +809,14 @@ function updateFormMode(form) {
   if (cancel) cancel.style.display = editing || editModal.form === form ? "inline-flex" : "none";
 }
 
-function openCreateForm(key) {
+async function openCreateForm(key) {
   if (!window.FortyAccess?.canCreate(key)) return toast("Seu perfil não tem acesso a este formulário.");
   const names = { customer: "Novo cliente", product: "Novo produto", seller: "Novo vendedor", region: "Nova região", vehicle: "Novo veículo", order: "Novo pedido", load: "Nova carga", payable: "Nova conta a pagar", receivable: "Nova conta a receber", stock: "Movimentar estoque", productionPlan: "Programar produção", user: "Novo usuário" };
   const form = $(`[data-edit-key='${key}']`);
   if (!form || !names[key]) return;
   const resumeDraft = form.dataset.dirty === "true" && !state.editing[key];
   if (!resumeDraft) {
-    if (form.dataset.dirty === "true" && !confirm("Descartar as alterações deste formulário?")) return;
+    if (form.dataset.dirty === "true" && !(await askConfirmation("Descartar as alterações deste formulário?", { title: 'Descartar alterações?', accept: 'Descartar', cancel: 'Continuar editando', destructive: true }))) return;
     form.reset();
     delete form.dataset.dirty;
     if (key === "order") {
@@ -836,6 +836,7 @@ function openCreateForm(key) {
 }
 
 function openEditModal(form, title) {
+  window.FortyControls?.closeAll();
   editModal.returnFocus = document.activeElement;
   if (editModal.form && editModal.form !== form) {
     closeEditModal();
@@ -1064,11 +1065,11 @@ function setupFormModes() {
   }
 }
 
-function resetEdit(key) {
+async function resetEdit(key) {
   const form = $(`[data-edit-key='${key}']`);
   if (!form) return;
   if (form.dataset.saving === "true") return;
-  if (form.dataset.dirty === "true" && !confirm("Descartar as alterações deste formulário?")) return;
+  if (form.dataset.dirty === "true" && !(await askConfirmation("Descartar as alterações deste formulário?", { title: 'Descartar alterações?', accept: 'Descartar', cancel: 'Continuar editando', destructive: true }))) return;
   state.editing[key] = null;
   form.reset();
   delete form.dataset.dirty;
@@ -1230,7 +1231,7 @@ async function settle(url, message) {
 }
 
 async function deleteResource(label, url) {
-  if (!confirm(`Tem certeza que deseja excluir ${label}?`)) return;
+  if (!(await askConfirmation(`Tem certeza que deseja excluir ${label}?`, { title: 'Excluir registro', accept: 'Excluir', destructive: true }))) return;
   try {
     await api(url, { method: "DELETE" });
     toast("Excluído com sucesso.");
@@ -1263,9 +1264,6 @@ function showView(view) {
   if (pagedListDefinitions[view]) refreshList(view).catch(error => toast(error.message));
 }
 
-function preventDirtyExit(event) {
-  if ($$("form[data-dirty='true']").length) { event.preventDefault(); event.returnValue = ""; }
-}
 
 function wireActions() {
   $("#refreshData").addEventListener("click", () => {
@@ -1280,7 +1278,6 @@ function wireActions() {
     renderOrders();
   }));
   $("#moreOrders").addEventListener("click", () => { visibleOrders += 40; renderOrders(); });
-  window.addEventListener("beforeunload", preventDirtyExit);
   window.addEventListener("unhandledrejection", event => {
     toast(event.reason?.message || "Não foi possível concluir a operação.");
     event.preventDefault();
@@ -1392,9 +1389,9 @@ function wireActions() {
   });
 
   document.addEventListener("keydown", event => {
-    if (event.fortyControlHandled) return;
+    if (event.fortyControlHandled || event.target.closest?.("dialog[open]")) return;
     if (event.key === "Tab" && editModal.form) {
-      const elements = $$("button:not(:disabled), input:not(:disabled):not([type=hidden]):not(.tomselected), select:not(:disabled):not(.tomselected), textarea:not(:disabled), [tabindex='0']", $("#editModal"))
+      const elements = $$("#editModal button:not(:disabled), #editModal input:not(:disabled):not([type=hidden]):not(.tomselected), #editModal select:not(:disabled):not(.tomselected), #editModal textarea:not(:disabled), #editModal [tabindex='0'], #controlOverlayRoot button:not(:disabled), #controlOverlayRoot input:not(:disabled), #controlOverlayRoot [tabindex='0']")
         .filter(x => x.getClientRects().length > 0);
       const first = elements[0], last = elements.at(-1);
       if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
@@ -2039,6 +2036,7 @@ async function init() {
 }
 
 function showLogin(message = "") {
+  window.FortyDialogs?.cancel();
   if (editModal.form) closeEditModal();
   if ($("#passwordDialog").open) $("#passwordDialog").close();
   if ($("#profileDialog").open) $("#profileDialog").close();
@@ -2064,6 +2062,13 @@ function updateProfile(user) {
   window.FortyAccess?.apply();
   const currentView = $(".view.active")?.id;
   if (!window.FortyAccess?.canView(currentView)) showView(window.FortyAccess.home());
+}
+
+async function logout() {
+  const dirty = $$("form[data-dirty='true']").length > 0;
+  if (!(await askConfirmation(dirty ? 'Sair e descartar os formulários em preenchimento?' : 'Deseja sair da sua conta?', { title: 'Sair da conta', accept: 'Sair da conta' }))) return;
+  showLogin();
+  location.reload();
 }
 
 function wireAuthentication() {
@@ -2102,12 +2107,7 @@ function wireAuthentication() {
     } catch (error) { $("#loginError").textContent = error.message; }
     finally { button.disabled = false; button.textContent = "Entrar"; }
   });
-  $("#logout").addEventListener("click", async () => {
-    if ($$("form[data-dirty='true']").length && !confirm("Sair e descartar os formulários em preenchimento?")) return;
-    window.removeEventListener("beforeunload", preventDirtyExit);
-    showLogin();
-    location.reload();
-  });
+  $("#logout").addEventListener("click", logout);
   $("#changePassword").addEventListener("click", () => {
     profileDialog.close();
     $("#passwordDialog").showModal();
