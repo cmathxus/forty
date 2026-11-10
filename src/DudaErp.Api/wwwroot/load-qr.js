@@ -23,9 +23,22 @@ function renderLoadQr(load) {
     <p class="load-qr-url">${escapeHtml(url)}</p></div></section>`;
 }
 
+function presentLoadQrTarget(load = null) {
+  // A lista fica abaixo do formulário de nova carga na tela normal.
+  // Na entrada pelo romaneio, a conferência precisa ser a primeira informação.
+  const form = $('#loadForm');
+  if (form) form.hidden = Boolean(load);
+  const heading = $('#loads > header h2');
+  if (heading?.dataset) {
+    heading.dataset.qrOriginalText ??= heading.textContent;
+    heading.textContent = load ? `Conferência da carga ${load.number}` : heading.dataset.qrOriginalText;
+  }
+}
+
 function openLoadQrTarget() {
   const hash = window.location.hash;
   if (!hash.startsWith('#conferencia=')) {
+    presentLoadQrTarget();
     if (qrSelectedLoadId) { qrSelectedLoadId = null; renderLoads(); }
     return;
   }
@@ -33,25 +46,34 @@ function openLoadQrTarget() {
   const id = hash.slice('#conferencia='.length).toLowerCase();
   if (!loadQrIdPattern.test(id) || !hasPermission('loads.manage')) {
     qrSelectedLoadId = null;
+    presentLoadQrTarget();
     window.history.replaceState(null, '', window.location.pathname + window.location.search);
     toast(!hasPermission('loads.manage') ? 'Seu perfil não tem acesso à conferência de cargas.' : 'O link de conferência é inválido.');
     return;
   }
-  if (!state.loads.some(load => load.id === id)) {
+  const load = state.loads.find(load => load.id === id);
+  if (!load) {
     qrSelectedLoadId = null;
+    presentLoadQrTarget();
     window.history.replaceState(null, '', window.location.pathname + window.location.search);
     showView('loads'); renderLoads(); toast('Carga não encontrada. Confira o romaneio.');
     return;
   }
+  presentLoadQrTarget(load);
   if (qrSelectedLoadId === id) return;
   qrSelectedLoadId = id;
   $('#loadMissingOnly').checked = false;
   renderLoads();
   showView('loads');
+  const list = $('#loadsList');
+  list?.setAttribute?.('tabindex', '-1');
+  list?.focus?.({ preventScroll: true });
+  list?.scrollIntoView?.({ block: 'start', behavior: 'instant' });
 }
 
 function closeLoadQrTarget() {
   qrSelectedLoadId = null;
+  presentLoadQrTarget();
   window.history.replaceState(null, '', window.location.pathname + window.location.search);
   renderLoads();
 }
