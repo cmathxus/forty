@@ -7,6 +7,30 @@ const source = readFileSync(new URL('../src/DudaErp.Api/wwwroot/app.js', import.
   .replace(/\ninit\(\)\.catch[\s\S]*$/, '');
 const inventorySource = readFileSync(new URL('../src/DudaErp.Api/wwwroot/inventory.js', import.meta.url), 'utf8');
 const productionSource = readFileSync(new URL('../src/DudaErp.Api/wwwroot/production.js', import.meta.url), 'utf8');
+const accessSource = readFileSync(new URL('../src/DudaErp.Api/wwwroot/access.js', import.meta.url), 'utf8');
+
+test('menus, atalhos e ações respeitam os acessos confirmados para cada setor', () => {
+  const ui = setup();
+  vm.runInContext(accessSource, ui.context);
+  ui.run(`state.currentUser = {permissions:['catalog.read','stock.read','production.manage']}`);
+  assert.equal(ui.run(`window.FortyAccess.home()`), 'production');
+  assert.equal(ui.run(`window.FortyAccess.canView('production')`), true);
+  assert.equal(ui.run(`window.FortyAccess.canView('products')`), true);
+  for (const view of ['users','payables','customers','orders','loads']) assert.equal(ui.run(`window.FortyAccess.canView('${view}')`), false);
+  assert.equal(ui.run(`window.FortyAccess.canUse({dataset:{editProduct:'x'}})`), false);
+  assert.equal(ui.run(`window.FortyAccess.canCreate('stock')`), false);
+  ui.run(`state.currentUser = {permissions:['catalog.read','stock.read','catalog.references','loads.manage','orders.read']}`);
+  assert.equal(ui.run(`window.FortyAccess.home()`), 'loads');
+  assert.equal(ui.run(`window.FortyAccess.canCreate('load')`), true);
+  assert.equal(ui.run(`window.FortyAccess.canCreate('order')`), false);
+  assert.equal(ui.run(`window.FortyAccess.canReport('reconciliation')`), true);
+  assert.equal(ui.run(`window.FortyAccess.canReport('salesPosition')`), false);
+  ui.run(`state.currentUser = {permissions:['orders.manage','customers.manage','finance.manage']}`);
+  assert.equal(ui.run(`window.FortyAccess.home()`), 'dashboard');
+  assert.equal(ui.run(`window.FortyAccess.canView('payables')`), true);
+  assert.equal(ui.run(`window.FortyAccess.canUse({dataset:{editCustomer:'x'}})`), true);
+  assert.equal(ui.run(`window.FortyAccess.canView('users')`), false);
+});
 
 test('envio da programação lê 301 do campo de quantidade, ignorando a busca do dropdown', () => {
   const ui = setup();

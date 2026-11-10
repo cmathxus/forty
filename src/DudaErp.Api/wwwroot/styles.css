@@ -18,6 +18,7 @@ html { scrollbar-gutter: stable; }
   ::-webkit-scrollbar-button { display: none; width: 0; height: 0; }
 }
 [hidden] { display: none !important; }
+.operations-overview:has(> .operation-flow[hidden]) { grid-template-columns: minmax(0, 1fr); }
 body { margin: 0; min-height: 100vh; background: var(--bg); color: var(--text); }
 h1, h2, h3, p { margin-top: 0; }
 h2 { font-size: 27px; font-weight: 600; letter-spacing: -.035em; margin-bottom: 5px; line-height: 1.2; }

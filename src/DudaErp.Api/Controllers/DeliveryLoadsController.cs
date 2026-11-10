@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using DudaErp.Api.Contracts;
 using DudaErp.Api.Data;
 using DudaErp.Api.Domain;
@@ -8,6 +9,7 @@ using Microsoft.EntityFrameworkCore;
 namespace DudaErp.Api.Controllers;
 
 [ApiController]
+[Authorize(Policy = "loads.manage")]
 [Route("api/delivery-loads")]
 public sealed class DeliveryLoadsController(AppDbContext dbContext) : ControllerBase
 {

@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using DudaErp.Api.Contracts;
 using DudaErp.Api.Data;
 using DudaErp.Api.Domain;
@@ -7,6 +8,7 @@ using Microsoft.EntityFrameworkCore;
 namespace DudaErp.Api.Controllers;
 
 [ApiController]
+[Authorize(Policy = "finance.manage")]
 [Route("api/financial")]
 public sealed class FinancialController(AppDbContext dbContext) : ControllerBase
 {

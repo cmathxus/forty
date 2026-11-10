@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using System.Data;
 using System.Globalization;
 using System.Text;
@@ -11,12 +12,14 @@ using Microsoft.EntityFrameworkCore;
 namespace DudaErp.Api.Controllers;
 
 [ApiController]
+[Authorize]
 [Route("api/import")]
 public sealed class ImportController(AppDbContext dbContext) : ControllerBase
 {
     public sealed record RowWarning(int Row, string Reason);
 
     [HttpPost("customers")]
+    [Authorize(Policy = "customers.manage")]
     [RequestSizeLimit(20_000_000)]
     public async Task<ActionResult<object>> ImportCustomers(IFormFile file, CancellationToken cancellationToken)
     {
@@ -87,6 +90,7 @@ public sealed class ImportController(AppDbContext dbContext) : ControllerBase
     }
 
     [HttpPost("products")]
+    [Authorize(Policy = "catalog.manage")]
     [RequestSizeLimit(20_000_000)]
     public async Task<ActionResult<object>> ImportProducts(IFormFile file, CancellationToken cancellationToken)
     {

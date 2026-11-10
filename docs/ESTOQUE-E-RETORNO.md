@@ -20,7 +20,7 @@ Após a fabricação, Confirmar produção solicita data e quantidade efetivamen
 
 Produção avulsa continua disponível em Movimentar estoque para fabricação que não veio de uma programação. Uma produção programada deve ser confirmada pela própria programação, sem ser lançada também como movimento avulso.
 
-O relato identifica faturamento, expedição e montagem de cargas como usuários. Isso não define permissões específicas; a separação de acessos ficou como possibilidade futura, sem novos perfis presumidos nesta alteração.
+A divisão de acesso por setor foi posteriormente confirmada e implementada. Consulte ACESSOS.md.
 
 ## Integridade e histórico
 
@@ -37,4 +37,4 @@ As migrations InventoryControl, ProductionDate e ProductionPlanning adicionam St
 
 Os testes PostgreSQL criam schemas temporários forty_test_* com migrations próprias e os removem ao terminar. Não usam as tabelas da aplicação. Cobrem concorrência de saída, devolução parcial com falta, repetição de movimentos/baixas e compatibilidade de cargas antigas. Testes JavaScript verificam a conferência de quantidades.
 
-Permissões por função, reservas de estoque, lotes/validade, múltiplos depósitos e estorno de baixa não foram solicitados nesses áudios e não fazem parte desta implementação.
+Reservas de estoque, lotes/validade, múltiplos depósitos e estorno de baixa não foram solicitados nesses áudios e não fazem parte desta implementação.

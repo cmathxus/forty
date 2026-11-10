@@ -22,7 +22,7 @@
 
 ## Limites e próximos passos
 
-- Há somente o administrador configurado. Gestão de usuários e permissões diferentes para faturamento, financeiro e expedição continuam pendentes de definição.
+- Gestão de usuários e perfis Administrador, Faturamento, Expedição e Produção implementada conforme a divisão confirmada. Consulte ACESSOS.md para a matriz e as proteções de sessão.
 - A condição 30/60 ainda representa apenas o primeiro vencimento. Parcelamento real, geração automática de recebíveis e centralização de vencimentos no backend precisam de uma etapa própria com regra comercial validada.
 - A interface ainda agrega o histórico de pedidos em memória para dashboard/relatórios. Os próximos ganhos para bases grandes são endpoints agregados de dashboard, filtros por período no servidor e paginação também de cadastros/cargas/financeiro.
 - As proteções de estado reduzem alterações destrutivas, mas ainda falta controle otimista de concorrência para duas pessoas editando simultaneamente. Ainda não há auditoria completa nem estorno formal de baixas.

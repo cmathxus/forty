@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using DudaErp.Api.Contracts;
 using DudaErp.Api.Data;
 using DudaErp.Api.Domain;
@@ -8,10 +9,12 @@ using Microsoft.EntityFrameworkCore;
 namespace DudaErp.Api.Controllers;
 
 [ApiController]
+[Authorize(Policy = "orders.read")]
 [Route("api/orders")]
 public sealed class OrdersController(AppDbContext dbContext, OrderService orderService) : ControllerBase
 {
     [HttpPost]
+    [Authorize(Policy = "orders.manage")]
     public async Task<ActionResult<Order>> Create(CreateOrderRequest request, CancellationToken cancellationToken)
     {
         try
@@ -72,6 +75,7 @@ public sealed class OrdersController(AppDbContext dbContext, OrderService orderS
     }
 
     [HttpPut("{id:guid}")]
+    [Authorize(Policy = "orders.manage")]
     public async Task<ActionResult<Order>> Update(Guid id, CreateOrderRequest request, CancellationToken cancellationToken)
     {
         try
@@ -91,6 +95,7 @@ public sealed class OrdersController(AppDbContext dbContext, OrderService orderS
     }
 
     [HttpDelete("{id:guid}")]
+    [Authorize(Policy = "orders.manage")]
     public async Task<IActionResult> Delete(Guid id, CancellationToken cancellationToken)
     {
         var order = await dbContext.Orders

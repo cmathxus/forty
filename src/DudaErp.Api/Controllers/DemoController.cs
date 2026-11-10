@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using DudaErp.Api.Data;
 using DudaErp.Api.Domain;
 using Microsoft.AspNetCore.Mvc;
@@ -6,6 +7,7 @@ using Microsoft.EntityFrameworkCore;
 namespace DudaErp.Api.Controllers;
 
 [ApiController]
+[Authorize(Policy = "users.manage")]
 [Route("api/demo")]
 public sealed class DemoController(AppDbContext dbContext) : ControllerBase
 {

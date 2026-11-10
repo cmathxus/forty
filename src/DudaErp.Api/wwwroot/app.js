@@ -10,6 +10,8 @@ const state = {
   receivables: [],
   inventory: { items: [], movements: [] },
   productionPlans: [],
+  users: [],
+  currentUser: null,
   editing: {}
 };
 let visibleOrders = 40;
@@ -51,6 +53,7 @@ const dateTimeToDateOnly = value => value ? new Date(value).toISOString().slice(
 const localDateOnly = date => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 const normalize = value => String(value ?? "").toLowerCase();
 const apiBaseUrl = String(window.FORTY_CONFIG?.apiBaseUrl ?? "").replace(/\/$/, "");
+const hasPermission = permission => Boolean(state.currentUser?.permissions?.includes(permission));
 
 function apiUrl(path) {
   return `${apiBaseUrl}${path}`;
@@ -65,6 +68,7 @@ function toast(message) {
 }
 
 async function api(path, options = {}) {
+  const requestToken = accessToken;
   let response;
   try {
     response = await fetch(apiUrl(path), {
@@ -76,15 +80,20 @@ async function api(path, options = {}) {
     throw new Error("Não foi possível conectar ao servidor. Verifique sua conexão e tente novamente.");
   }
 
+  if (requestToken && requestToken !== accessToken) throw new Error("A sessão mudou. Entre novamente para continuar.");
+
   if (!response.ok) {
     if (response.status === 401 && path !== "/api/auth/login") showLogin("Sua sessão expirou. Entre novamente.");
     if (response.status === 429) throw new Error("Muitas tentativas de acesso. Aguarde um minuto e tente novamente.");
+    if (response.status === 403) throw new Error("Seu perfil não tem permissão para esta operação.");
     const text = await response.text();
     throw new Error(errorMessage(text) || `Erro ${response.status}`);
   }
 
   if (response.status === 204) return null;
-  return response.json();
+  const data = await response.json();
+  if (requestToken && requestToken !== accessToken) throw new Error("A sessão mudou. Entre novamente para continuar.");
+  return data;
 }
 
 function errorMessage(text) {
@@ -164,11 +173,11 @@ function updateOrderCustomerHint() {
 
 async function refreshCatalog() {
   const [regions, sellers, vehicles, products, customers] = await Promise.all([
-    api("/api/catalog/regions"),
-    api("/api/catalog/sellers"),
-    api("/api/catalog/vehicles"),
+    hasPermission("catalog.references") ? api("/api/catalog/regions") : [],
+    hasPermission("catalog.references") ? api("/api/catalog/sellers") : [],
+    hasPermission("catalog.references") ? api("/api/catalog/vehicles") : [],
     api("/api/catalog/products"),
-    api("/api/customers")
+    hasPermission("customers.manage") ? api("/api/customers") : []
   ]);
 
   state.regions = regions;
@@ -419,7 +428,7 @@ function renderDashboard() {
       meta: `${money(item.amount)} · vence ${dateBR(item.dueDate)}`,
       view: "payables"
     }))
-  ].slice(0, 6);
+  ].filter(item => !window.FortyAccess || window.FortyAccess.canView(item.view)).slice(0, 6);
 
   $("#dashboardActionCount").textContent = actionRows.length ? `${actionRows.length} ${actionRows.length === 1 ? "ação" : "ações"}` : "";
   actions.innerHTML = actionRows.map(item => `
@@ -817,7 +826,8 @@ function updateFormMode(form) {
 }
 
 function openCreateForm(key) {
-  const names = { customer: "Novo cliente", product: "Novo produto", seller: "Novo vendedor", region: "Nova região", vehicle: "Novo veículo", order: "Novo pedido", load: "Nova carga", payable: "Nova conta a pagar", receivable: "Nova conta a receber", stock: "Movimentar estoque", productionPlan: "Programar produção" };
+  if (!window.FortyAccess?.canCreate(key)) return toast("Seu perfil não tem acesso a este formulário.");
+  const names = { customer: "Novo cliente", product: "Novo produto", seller: "Novo vendedor", region: "Nova região", vehicle: "Novo veículo", order: "Novo pedido", load: "Nova carga", payable: "Nova conta a pagar", receivable: "Nova conta a receber", stock: "Movimentar estoque", productionPlan: "Programar produção", user: "Novo usuário" };
   const form = $(`[data-edit-key='${key}']`);
   if (!form || !names[key]) return;
   const resumeDraft = form.dataset.dirty === "true" && !state.editing[key];
@@ -833,6 +843,7 @@ function openCreateForm(key) {
     }
   }
   state.editing[key] = null;
+  if (key === "user") prepareUserForm();
   if (key === "productionPlan" && !resumeDraft) prepareProductionPlan();
   if (key === "load") renderLoadOrderChoices();
   window.FortyControls?.sync(form);
@@ -855,7 +866,7 @@ function openEditModal(form, title) {
   $("#editModalTitle").textContent = title;
   $("#editModalBody").append(form);
   $("#editModal").classList.toggle("compact-modal", form.id === "regionForm");
-  $("#editModal").classList.toggle("medium-modal", ["sellerForm", "vehicleForm", "stockForm"].includes(form.id));
+  $("#editModal").classList.toggle("medium-modal", ["sellerForm", "vehicleForm", "stockForm", "userForm", "userPasswordForm"].includes(form.id));
   $("#editModal").classList.add("open");
   $("#editModal").setAttribute("aria-hidden", "false");
   updateFormMode(form);
@@ -1052,7 +1063,9 @@ function setupFormModes() {
     stockForm: "stock",
     deliveryCheckForm: "delivery",
     productionPlanForm: "productionPlan",
-    productionCompletionForm: "productionCompletion"
+    productionCompletionForm: "productionCompletion",
+    userForm: "user",
+    userPasswordForm: "userPassword"
   };
 
   for (const [formId, key] of Object.entries(keys)) {
@@ -1244,6 +1257,7 @@ async function deleteResource(label, url) {
 }
 
 function showView(view) {
+  if (!window.FortyAccess?.canView(view)) return toast("Seu perfil não tem acesso a esta área.");
   window.FortyControls?.closeAll();
   const button = $(`aside [data-view='${view}']`);
   if (!button) return;
@@ -1323,6 +1337,9 @@ function wireActions() {
 
   document.addEventListener("click", async event => {
     const target = event.target.closest("button") || event.target;
+    if (window.FortyAccess && !window.FortyAccess.canUse(target)) return toast("Seu perfil não tem permissão para esta ação.");
+    if (target.dataset?.editUser) return editUser(target.dataset.editUser);
+    if (target.dataset?.resetUserPassword) return openUserPassword(target.dataset.resetUserPassword);
     if (target.dataset?.productionComplete) return openProductionCompletion(target.dataset.productionComplete);
     if (target.dataset?.productionReport) return openReport("productionPlan", target.dataset.productionReport);
     if (target.dataset?.productionCancel) return cancelProductionPlan(target.dataset.productionCancel);
@@ -1525,6 +1542,7 @@ function withinDateRange(value, from, to) {
 }
 
 async function openReport(type, id = null, filters = {}) {
+  if (!window.FortyAccess?.canReport(type)) return toast("Seu perfil não tem acesso a este relatório.");
   const reportWindow = window.open("", "_blank");
   if (!reportWindow) {
     toast("O navegador bloqueou a janela do relatorio.");
@@ -1970,9 +1988,16 @@ async function refreshAll() {
   $("#syncStatus").textContent = "Atualizando dados…";
   refreshPromise = (async () => {
     try {
-      const results = await Promise.allSettled([refreshCatalog(), refreshOrders(), refreshLoads(), refreshFinancial(), refreshInventory(), refreshProduction()]);
+      const tasks = [refreshCatalog(), refreshInventory()];
+      if (hasPermission("orders.read")) tasks.push(refreshOrders());
+      if (hasPermission("loads.manage")) tasks.push(refreshLoads());
+      if (hasPermission("finance.manage")) tasks.push(refreshFinancial());
+      if (hasPermission("production.manage")) tasks.push(refreshProduction());
+      if (hasPermission("users.manage")) tasks.push(refreshUsers());
+      const results = await Promise.allSettled(tasks);
       const failure = results.find(result => result.status === "rejected");
       if (failure) throw failure.reason;
+      window.FortyAccess?.apply();
       $("#syncStatus").textContent = `Atualizado às ${new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}`;
     } catch (error) {
       $("#syncStatus").textContent = "Falha ao atualizar. Tente novamente.";
@@ -1990,12 +2015,14 @@ async function init() {
   wireAuthentication();
   wireInventory();
   wireProduction();
+  wireUsers();
   setupFormModes();
   wireNav();
   wireForms();
   wireActions();
   addItemRow();
   window.FortyControls?.init();
+  window.FortyAccess?.observe();
   $("#dashboardDate").textContent = new Intl.DateTimeFormat("pt-BR", {
     weekday: "long", day: "numeric", month: "long", timeZone: "America/Sao_Paulo"
   }).format(new Date());
@@ -2013,15 +2040,19 @@ async function init() {
 }
 
 function showLogin(message = "") {
+  if (editModal.form) closeEditModal();
+  if ($("#passwordDialog").open) $("#passwordDialog").close();
   if ($("#profileDialog").open) $("#profileDialog").close();
   accessToken = "";
   sessionStorage.removeItem("forty.accessToken");
+  window.FortyAccess?.clear();
   document.body.classList.add("auth-locked");
   $("#loginError").textContent = message;
   $("#loginForm input[name='password']").value = "";
 }
 
 function updateProfile(user) {
+  state.currentUser = user;
   const name = user.name || "Minha conta";
   const initials = name.trim().split(/\s+/).slice(0, 2).map(part => part[0]).join("").toLocaleUpperCase("pt-BR");
   $("#profileTriggerName").textContent = name;
@@ -2031,6 +2062,9 @@ function updateProfile(user) {
   $("#profileAccess").textContent = user.role || "Usuário";
   $("#profileInitials").textContent = initials;
   $("#profileAvatar").textContent = initials;
+  window.FortyAccess?.apply();
+  const currentView = $(".view.active")?.id;
+  if (!window.FortyAccess?.canView(currentView)) showView(window.FortyAccess.home());
 }
 
 function wireAuthentication() {

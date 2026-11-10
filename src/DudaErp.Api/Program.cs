@@ -44,8 +44,14 @@ builder.Services.AddScoped<OrderService>();
 builder.Services.AddScoped<PasswordHasher<AppUser>>();
 builder.Services.AddAuthentication("Bearer").AddBearerToken("Bearer", options =>
     options.BearerTokenExpiration = TimeSpan.FromHours(8));
-builder.Services.AddAuthorization(options => options.FallbackPolicy =
-    new AuthorizationPolicyBuilder().RequireAuthenticatedUser().Build());
+builder.Services.AddAuthorization(options =>
+{
+    options.DefaultPolicy = new AuthorizationPolicyBuilder().RequireAuthenticatedUser().RequireRole(AccessRules.Roles).Build();
+    // Endpoints novos exigem administrador até terem uma permissão explícita.
+    options.FallbackPolicy = new AuthorizationPolicyBuilder().RequireAuthenticatedUser().RequireRole(AccessRules.Admin).Build();
+    foreach (var (permission, roles) in AccessRules.Permissions)
+        options.AddPolicy(permission, policy => policy.RequireAuthenticatedUser().RequireRole(roles));
+});
 builder.Services.AddRateLimiter(options =>
 {
     options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
@@ -81,7 +87,8 @@ app.Use(async (context, next) =>
         var idText = context.User.FindFirstValue(ClaimTypes.NameIdentifier);
         var stampText = context.User.FindFirstValue("security_stamp");
         if (!Guid.TryParse(idText, out var id) || !Guid.TryParse(stampText, out var stamp) ||
-            !await db.Users.AsNoTracking().AnyAsync(x => x.Id == id && x.IsActive && x.SecurityStamp == stamp, context.RequestAborted))
+            !await db.Users.AsNoTracking().AnyAsync(x => x.Id == id && x.IsActive && x.SecurityStamp == stamp &&
+                x.Role == context.User.FindFirstValue(ClaimTypes.Role), context.RequestAborted))
         {
             context.Response.StatusCode = StatusCodes.Status401Unauthorized;
             return;
@@ -96,16 +103,19 @@ app.MapGet("/health", () => Results.Ok(new { status = "healthy" })).AllowAnonymo
 using (var scope = app.Services.CreateScope())
 {
     var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-    if (new Npgsql.NpgsqlConnectionStringBuilder(builder.Configuration.GetConnectionString("Postgres")).SearchPath == "forty")
-        await dbContext.Database.ExecuteSqlRawAsync("CREATE SCHEMA IF NOT EXISTS forty");
-    await dbContext.Database.MigrateAsync();
+    if (dbContext.Database.IsRelational())
+    {
+        if (new Npgsql.NpgsqlConnectionStringBuilder(builder.Configuration.GetConnectionString("Postgres")).SearchPath == "forty")
+            await dbContext.Database.ExecuteSqlRawAsync("CREATE SCHEMA IF NOT EXISTS forty");
+        await dbContext.Database.MigrateAsync();
+    }
 
     var adminEmail = builder.Configuration["Authentication:AdminEmail"]?.Trim().ToLowerInvariant();
     var adminPassword = builder.Configuration["Authentication:AdminPassword"];
     if (!string.IsNullOrWhiteSpace(adminEmail) && !string.IsNullOrWhiteSpace(adminPassword) &&
         !await dbContext.Users.AnyAsync(x => x.Email == adminEmail))
     {
-        var admin = new AppUser { Email = adminEmail, Name = "Administrador", PasswordHash = "" };
+        var admin = new AppUser { Email = adminEmail, Name = "Administrador", Role = AccessRules.Admin, PasswordHash = "" };
         admin.PasswordHash = scope.ServiceProvider.GetRequiredService<PasswordHasher<AppUser>>().HashPassword(admin, adminPassword);
         dbContext.Users.Add(admin);
         await dbContext.SaveChangesAsync();

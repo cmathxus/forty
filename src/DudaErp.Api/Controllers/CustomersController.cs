@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using DudaErp.Api.Contracts;
 using DudaErp.Api.Data;
 using DudaErp.Api.Domain;
@@ -7,6 +8,7 @@ using Microsoft.EntityFrameworkCore;
 namespace DudaErp.Api.Controllers;
 
 [ApiController]
+[Authorize(Policy = "customers.manage")]
 [Route("api/customers")]
 public sealed class CustomersController(AppDbContext dbContext) : ControllerBase
 {

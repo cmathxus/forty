@@ -2,6 +2,7 @@ using System.ComponentModel.DataAnnotations;
 using System.Security.Claims;
 using DudaErp.Api.Data;
 using DudaErp.Api.Domain;
+using DudaErp.Api.Services;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
@@ -12,6 +13,7 @@ using Microsoft.EntityFrameworkCore;
 namespace DudaErp.Api.Controllers;
 
 [ApiController]
+[Authorize]
 [Route("api/auth")]
 public sealed class AuthController(AppDbContext db, PasswordHasher<AppUser> hasher) : ControllerBase
 {
@@ -29,7 +31,7 @@ public sealed class AuthController(AppDbContext db, PasswordHasher<AppUser> hash
         var candidate = user ?? new AppUser { Email = email, Name = "", PasswordHash = "" };
         var hash = user?.PasswordHash ?? hasher.HashPassword(candidate, "invalid-password-placeholder");
         var valid = hasher.VerifyHashedPassword(candidate, hash, request.Password);
-        if (user is null || valid == PasswordVerificationResult.Failed)
+        if (user is null || valid == PasswordVerificationResult.Failed || !AccessRules.Roles.Contains(user.Role))
             return Unauthorized(new { detail = "E-mail ou senha inválidos." });
         if (valid == PasswordVerificationResult.SuccessRehashNeeded)
         {
@@ -47,8 +49,9 @@ public sealed class AuthController(AppDbContext db, PasswordHasher<AppUser> hash
     }
 
     [HttpGet("me")]
-    public IActionResult Me() => Ok(new { name = User.Identity!.Name,
-        email = User.FindFirstValue(ClaimTypes.Email), role = User.FindFirstValue(ClaimTypes.Role) });
+    public IActionResult Me() => Ok(new { id = User.FindFirstValue(ClaimTypes.NameIdentifier), name = User.Identity!.Name,
+        email = User.FindFirstValue(ClaimTypes.Email), role = User.FindFirstValue(ClaimTypes.Role),
+        permissions = AccessRules.ForRole(User.FindFirstValue(ClaimTypes.Role)) });
 
     [HttpPost("password")]
     public async Task<IActionResult> ChangePassword(PasswordRequest request, CancellationToken ct)

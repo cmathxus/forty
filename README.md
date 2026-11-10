@@ -34,13 +34,15 @@ Em localhost/127.0.0.1, o frontend usa a mesma origem da API. A URL remota em `w
 - `node --test tests/frontend.test.mjs`
 - `dotnet test DudaErp.sln -c Release`
 
-O teste PostgreSQL exige `FORTY_TEST_CONNECTION` apontando para um banco de teste já migrado. Ele executa dentro de uma transação e reverte seus próprios dados; sem a variável, aparece como ignorado. Não use banco de produção.
+Os testes PostgreSQL exigem `FORTY_TEST_CONNECTION` e permissão para criar/remover schemas temporários. Eles aplicam as migrations em schemas próprios `forty_test_*` e os removem ao terminar, sem alterar as tabelas da aplicação. Sem a variável, aparecem como ignorados. Prefira um banco dedicado de testes.
 
 Os testes HTTP em `tests/auth.test.mjs` exigem `FORTY_TEST_BASE_URL`, `FORTY_TEST_EMAIL` e `FORTY_TEST_PASSWORD`, com a API em execução. Rode `node --test tests/auth.test.mjs`. Sem configuração, aparecem como ignorados.
 
 ## Segurança e operação
 
 Todos os controllers exigem autenticação. Login, arquivos estáticos e `/health` são públicos. O login limita tentativas por IP. CORS permite GitHub Pages e as origens locais padrão; ajuste `Cors:AllowedOrigins` para outras origens. Não há endpoint público de registro de usuários.
+
+Os perfis Administrador, Faturamento, Expedição e Produção têm permissões diferentes na API e na interface. Somente o administrador gerencia usuários em Cadastros → Usuários e acessos (`/api/users`). Alterar o acesso, desativar a conta ou redefinir a senha revoga as sessões anteriores. Veja [a divisão de acessos](docs/ACESSOS.md).
 
 As chaves de ASP.NET Data Protection protegem os tokens. Em produção, preserve o diretório de chaves da conta do serviço entre deploys e compartilhe-o se houver múltiplas instâncias. Não use a senha de teste em uma implantação real.
 

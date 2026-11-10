@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using DudaErp.Api.Contracts;
 using DudaErp.Api.Data;
 using DudaErp.Api.Domain;
@@ -8,10 +9,12 @@ using Microsoft.EntityFrameworkCore;
 namespace DudaErp.Api.Controllers;
 
 [ApiController]
+[Authorize(Policy = "catalog.read")]
 [Route("api/catalog")]
 public sealed class CatalogController(AppDbContext dbContext) : ControllerBase
 {
     [HttpPost("regions")]
+    [Authorize(Policy = "catalog.manage")]
     public async Task<ActionResult<Region>> CreateRegion(CreateRegionRequest request, CancellationToken cancellationToken)
     {
         var region = new Region { Name = request.Name.Trim() };
@@ -21,10 +24,12 @@ public sealed class CatalogController(AppDbContext dbContext) : ControllerBase
     }
 
     [HttpGet("regions")]
+    [Authorize(Policy = "catalog.references")]
     public Task<List<Region>> GetRegions(CancellationToken cancellationToken) =>
         dbContext.Regions.AsNoTracking().OrderBy(x => x.Name).ToListAsync(cancellationToken);
 
     [HttpPut("regions/{id:guid}")]
+    [Authorize(Policy = "catalog.manage")]
     public async Task<ActionResult<Region>> UpdateRegion(Guid id, CreateRegionRequest request, CancellationToken cancellationToken)
     {
         var region = await dbContext.Regions.SingleOrDefaultAsync(x => x.Id == id, cancellationToken);
@@ -38,6 +43,7 @@ public sealed class CatalogController(AppDbContext dbContext) : ControllerBase
     }
 
     [HttpDelete("regions/{id:guid}")]
+    [Authorize(Policy = "catalog.manage")]
     public async Task<IActionResult> DeleteRegion(Guid id, CancellationToken cancellationToken)
     {
         var region = await dbContext.Regions.SingleOrDefaultAsync(x => x.Id == id, cancellationToken);
@@ -50,6 +56,7 @@ public sealed class CatalogController(AppDbContext dbContext) : ControllerBase
     }
 
     [HttpPost("sellers")]
+    [Authorize(Policy = "catalog.manage")]
     public async Task<ActionResult<Seller>> CreateSeller(CreateSellerRequest request, CancellationToken cancellationToken)
     {
         var seller = new Seller
@@ -66,10 +73,12 @@ public sealed class CatalogController(AppDbContext dbContext) : ControllerBase
     }
 
     [HttpGet("sellers")]
+    [Authorize(Policy = "catalog.references")]
     public Task<List<Seller>> GetSellers(CancellationToken cancellationToken) =>
         dbContext.Sellers.AsNoTracking().OrderBy(x => x.Name).ToListAsync(cancellationToken);
 
     [HttpPut("sellers/{id:guid}")]
+    [Authorize(Policy = "catalog.manage")]
     public async Task<ActionResult<Seller>> UpdateSeller(Guid id, CreateSellerRequest request, CancellationToken cancellationToken)
     {
         var seller = await dbContext.Sellers.SingleOrDefaultAsync(x => x.Id == id, cancellationToken);
@@ -87,6 +96,7 @@ public sealed class CatalogController(AppDbContext dbContext) : ControllerBase
     }
 
     [HttpDelete("sellers/{id:guid}")]
+    [Authorize(Policy = "catalog.manage")]
     public async Task<IActionResult> DeleteSeller(Guid id, CancellationToken cancellationToken)
     {
         var seller = await dbContext.Sellers.SingleOrDefaultAsync(x => x.Id == id, cancellationToken);
@@ -99,6 +109,7 @@ public sealed class CatalogController(AppDbContext dbContext) : ControllerBase
     }
 
     [HttpPost("products")]
+    [Authorize(Policy = "catalog.manage")]
     public async Task<ActionResult<Product>> CreateProduct(CreateProductRequest request, CancellationToken cancellationToken)
     {
         var product = new Product
@@ -139,6 +150,7 @@ public sealed class CatalogController(AppDbContext dbContext) : ControllerBase
         dbContext.Products.AsNoTracking().OrderBy(x => x.Code).ToListAsync(cancellationToken);
 
     [HttpPut("products/{id:guid}")]
+    [Authorize(Policy = "catalog.manage")]
     public async Task<ActionResult<Product>> UpdateProduct(Guid id, CreateProductRequest request, CancellationToken cancellationToken)
     {
         await using var transaction = await new InventoryService(dbContext).BeginWriteAsync(cancellationToken);
@@ -172,6 +184,7 @@ public sealed class CatalogController(AppDbContext dbContext) : ControllerBase
     }
 
     [HttpDelete("products/{id:guid}")]
+    [Authorize(Policy = "catalog.manage")]
     public async Task<IActionResult> DeleteProduct(Guid id, CancellationToken cancellationToken)
     {
         var inventory = new InventoryService(dbContext);
@@ -189,6 +202,7 @@ public sealed class CatalogController(AppDbContext dbContext) : ControllerBase
     }
 
     [HttpPost("vehicles")]
+    [Authorize(Policy = "catalog.manage")]
     public async Task<ActionResult<Vehicle>> CreateVehicle(CreateVehicleRequest request, CancellationToken cancellationToken)
     {
         var vehicle = new Vehicle
@@ -203,10 +217,12 @@ public sealed class CatalogController(AppDbContext dbContext) : ControllerBase
     }
 
     [HttpGet("vehicles")]
+    [Authorize(Policy = "catalog.references")]
     public Task<List<Vehicle>> GetVehicles(CancellationToken cancellationToken) =>
         dbContext.Vehicles.AsNoTracking().OrderBy(x => x.Name).ToListAsync(cancellationToken);
 
     [HttpPut("vehicles/{id:guid}")]
+    [Authorize(Policy = "catalog.manage")]
     public async Task<ActionResult<Vehicle>> UpdateVehicle(Guid id, CreateVehicleRequest request, CancellationToken cancellationToken)
     {
         var vehicle = await dbContext.Vehicles.SingleOrDefaultAsync(x => x.Id == id, cancellationToken);
@@ -222,6 +238,7 @@ public sealed class CatalogController(AppDbContext dbContext) : ControllerBase
     }
 
     [HttpDelete("vehicles/{id:guid}")]
+    [Authorize(Policy = "catalog.manage")]
     public async Task<IActionResult> DeleteVehicle(Guid id, CancellationToken cancellationToken)
     {
         var vehicle = await dbContext.Vehicles.SingleOrDefaultAsync(x => x.Id == id, cancellationToken);
