@@ -284,6 +284,12 @@ namespace DudaErp.Api.Data.Migrations
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<DateTimeOffset?>("DispatchedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("DispatchedBy")
+                        .HasColumnType("text");
+
                     b.Property<string>("DriverName")
                         .HasColumnType("text");
 
@@ -332,6 +338,9 @@ namespace DudaErp.Api.Data.Migrations
                     b.Property<decimal?>("AmountReceived")
                         .HasPrecision(18, 2)
                         .HasColumnType("numeric(18,2)");
+
+                    b.Property<string>("CheckedBy")
+                        .HasColumnType("text");
 
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone");

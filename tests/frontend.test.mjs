@@ -8,6 +8,94 @@ const source = readFileSync(new URL('../src/DudaErp.Api/wwwroot/app.js', import.
 const inventorySource = readFileSync(new URL('../src/DudaErp.Api/wwwroot/inventory.js', import.meta.url), 'utf8');
 const productionSource = readFileSync(new URL('../src/DudaErp.Api/wwwroot/production.js', import.meta.url), 'utf8');
 const accessSource = readFileSync(new URL('../src/DudaErp.Api/wwwroot/access.js', import.meta.url), 'utf8');
+const qrSource = readFileSync(new URL('../src/DudaErp.Api/wwwroot/load-qr.js', import.meta.url), 'utf8');
+const qrVendor = readFileSync(new URL('../src/DudaErp.Api/wwwroot/vendor/qrcode-1.4.4.js', import.meta.url), 'utf8');
+
+function setupQr(href = 'https://cmathxus.github.io/forty/?secret=discard#old') {
+  const ui = setup();
+  ui.context.URL = URL;
+  ui.context.window.location = new URL(href);
+  ui.context.window.history = { replaceState(_state, _title, path) { ui.context.window.location = new URL(path, ui.context.window.location); } };
+  vm.runInContext(qrVendor + '\n' + qrSource, ui.context);
+  ui.run(`renderLoads=()=>{}; showView=view=>{window.openedView=view}; toast=message=>{window.message=message}`);
+  return ui;
+}
+
+test('romaneios geram QR local por carga com destino no Pages e sem credenciais', () => {
+  const ui = setupQr();
+  const id = '11111111-2222-3333-4444-555555555555';
+  const other = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';
+  assert.equal(ui.run(`loadQrUrl('${id}')`), `https://cmathxus.github.io/forty/#conferencia=${id}`);
+  assert.throws(() => ui.run(`loadQrUrl('<script>')`));
+  ui.run(`state.loads=[{id:'${id}',number:10,orders:[]},{id:'${other}',number:11,orders:[]}]`);
+  const body = ui.run('reportLoadingLoad(state.loads[0].id).body');
+  assert(body.includes('<svg')); assert(body.includes(`#conferencia=${id}`));
+  assert(!body.includes('secret='));
+  assert(ui.run('reportSingleLoad(state.loads[0].id).body').includes(`#conferencia=${id}`));
+  const grouped = ui.run('state.loads.map(load=>renderLoadingLoadBody(load,true)).join("")');
+  assert.equal((grouped.match(/<svg/g) || []).length, 2);
+  assert(grouped.includes(`#conferencia=${other}`));
+  ui.context.window.location = new URL('https://forty-3ot8.onrender.com/');
+  assert.equal(ui.run(`loadQrUrl('${id}')`), `https://forty-3ot8.onrender.com/#conferencia=${id}`);
+});
+
+test('leitura do QR preserva destino no login e abre somente a carga autorizada', () => {
+  const id = '11111111-2222-3333-4444-555555555555';
+  const ui = setupQr(`https://cmathxus.github.io/forty/#conferencia=${id}`);
+  ui.run('openLoadQrTarget()');
+  assert.equal(ui.run('qrSelectedLoadId'), null);
+  assert.equal(ui.context.window.location.hash, `#conferencia=${id}`);
+  ui.run(`accessToken='token';state.currentUser={permissions:['loads.manage']};state.loads=[{id:'${id}'}];openLoadQrTarget()`);
+  assert.equal(ui.run('qrSelectedLoadId'), id);
+  assert.equal(ui.context.window.openedView, 'loads');
+  ui.run('closeLoadQrTarget()');
+  assert.equal(ui.run('qrSelectedLoadId'), null); assert.equal(ui.context.window.location.hash, '');
+});
+
+test('QR rejeita perfil sem permissão, carga ausente e identificador inválido sem gravar baixa', () => {
+  const id = '11111111-2222-3333-4444-555555555555';
+  const ui = setupQr(`https://cmathxus.github.io/forty/#conferencia=${id}`);
+  ui.run(`accessToken='token';state.currentUser={permissions:['production.manage']};openLoadQrTarget()`);
+  assert.match(ui.context.window.message, /não tem acesso/);
+  assert.equal(ui.run('qrSelectedLoadId'), null);
+  ui.context.window.location.hash = `conferencia=${id}`;
+  ui.run(`state.currentUser={permissions:['loads.manage']};openLoadQrTarget()`);
+  assert.match(ui.context.window.message, /não encontrada/);
+  ui.context.window.location.hash = 'conferencia=abc';
+  ui.run('openLoadQrTarget()');
+  assert.match(ui.context.window.message, /inválido/);
+  assert.equal(ui.context.window.location.hash, '');
+});
+
+test('retorno de entrega não realizada destaca falta sem tratar pedidos pendentes como desvio', () => {
+  const ui = setup(); vm.runInContext(inventorySource, ui.context);
+  ui.run(`state.loads = [{id:'c',driverName:'Motorista',orders:[
+    {deliveryStatus:'Returned',order:{number:1,items:[{id:'a',productId:'p',productCode:'A',productName:'Flokmel',unit:'FD',quantity:10}]},itemResults:[{orderItemId:'a',deliveredQuantity:0,returnedQuantity:8,missingQuantity:2}]},
+    {deliveryStatus:'Pending',order:{number:2,items:[{id:'b',productId:'p',productCode:'A',productName:'Flokmel',unit:'FD',quantity:5}]},itemResults:[]},
+    {deliveryStatus:'Delivered',order:{number:3,items:[{id:'c',productId:'p',productCode:'A',productName:'Flokmel',unit:'FD',quantity:4}]},itemResults:[]},
+    {deliveryStatus:'Pending',order:{number:4,items:[{id:'d',productId:'p',productCode:'A',productName:'Flokmel',unit:'UN',quantity:20}]},itemResults:[]}
+  ]}]`);
+  const rows = ui.run('loadProductReconciliation(state.loads[0])');
+  assert.equal(rows.length, 2);
+  const fardos = rows.find(x => x.unit === 'FD');
+  assert.equal(fardos.sent, 19); assert.equal(fardos.returned, 8); assert.equal(fardos.missing, 2);
+  assert.equal(fardos.pending, 5); assert.equal(fardos.historical, 4);
+  assert.equal(ui.run('loadHasShortage(state.loads[0])'), true);
+  const check = ui.run(`deliveryCheckSummary([{id:'a',quantity:10,totalAmount:100}], [{orderItemId:'a',deliveredQuantity:'0',returnedQuantity:'8'}])`);
+  assert.equal(check.status, 4); assert.equal(check.items[0].missingQuantity, 2); assert.equal(check.deliveredAmount, 0);
+  assert(ui.run('reportReconciliation("c").body').includes('Resumo por produto'));
+});
+
+test('atalho de entrega não realizada zera entregue e pede contagem física do que voltou', () => {
+  const ui = setup(); vm.runInContext(inventorySource, ui.context);
+  const delivered = { value: '4' }, returned = { value: '6', focus() {} };
+  const row = { dataset: { itemId: 'a' }, querySelector: selector => selector === '[name=deliveredQuantity]' ? delivered : returned };
+  const form = { dataset: { loadId: 'c', orderId: 'o' }, elements: { amountReceived: { value: '10' }, paymentMethod: { value: '2' } }, querySelectorAll: () => [row], querySelector: () => returned };
+  ui.elements.set('#deliveryCheckForm', form);
+  ui.run(`state.loads=[{id:'c',orders:[{orderId:'o',order:{items:[{id:'a',quantity:10}]}}]}]; updateDeliveryCheck=()=>{}; fillDeliveryPreset('notDelivered')`);
+  assert.equal(delivered.value, 0); assert.equal(returned.value, ''); assert.equal(form.dataset.dirty, 'true');
+  assert.equal(form.elements.amountReceived.value, '0'); assert.equal(form.elements.paymentMethod.value, '0');
+});
 
 test('menus, atalhos e ações respeitam os acessos confirmados para cada setor', () => {
   const ui = setup();

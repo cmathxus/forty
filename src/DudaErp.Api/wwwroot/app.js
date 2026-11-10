@@ -501,10 +501,14 @@ function renderOrders() {
 function renderLoads() {
   const list = $("#loadsList");
   list.innerHTML = "";
-  const visibleLoads = state.loads.filter(load => load.orders.length > 0);
+  const onlyShortages = $("#loadMissingOnly")?.checked;
+  const qrId = typeof qrSelectedLoadId === 'undefined' ? null : qrSelectedLoadId;
+  const visibleLoads = state.loads.filter(load => qrId ? load.id === qrId : load.orders.length > 0 && (!onlyShortages || loadHasShortage(load)));
+  if (qrId) list.innerHTML = `<div class="qr-load-context"><div><strong>Carga aberta pelo romaneio</strong><p>Confira os pedidos abaixo. Escanear o QR Code não altera o estoque.</p></div><button type="button" id="showAllQrLoads">Ver todas as cargas</button></div>`;
+  $('#showAllQrLoads')?.addEventListener('click', closeLoadQrTarget);
 
   if (visibleLoads.length === 0) {
-    list.innerHTML = `<div class="card"><strong>Nenhuma carga criada</strong><div class="meta">Selecione pedidos confirmados e monte uma carga.</div></div>`;
+    list.innerHTML = onlyShortages ? `<div class="empty-state">Nenhuma carga com falta registrada.</div>` : `<div class="card"><strong>Nenhuma carga criada</strong><div class="meta">Selecione pedidos confirmados e monte uma carga.</div></div>`;
     return;
   }
 
@@ -519,6 +523,7 @@ function renderLoads() {
           <strong>Carga ${load.number} - ${escapeHtml(load.region?.name ?? "")}</strong>
           <div class="meta">${dateBR(load.scheduledDate)} | ${escapeHtml(load.vehicle ? `${load.vehicle.name} - ${load.vehicle.plate}` : "Sem veículo")} | Motorista: ${escapeHtml(load.driverName || "-")}</div>
           <div class="meta">${load.orders.length} pedidos | Total ${money(total)} | Recebido ${money(received)}</div>
+          ${load.dispatchedAt ? `<div class="meta">Saída registrada por ${escapeHtml(load.dispatchedBy || 'Não registrado')} em ${checkedDateTime(load.dispatchedAt)}</div>` : ''}
         </div>
         ${statusBadge(load.status)}
       </div>
@@ -529,6 +534,7 @@ function renderLoads() {
         <button type="button" data-edit-load="${load.id}" ${load.status !== "Open" ? "disabled" : ""}>Editar</button>
         <button type="button" data-delete-load="${load.id}" ${load.status !== "Open" ? "disabled" : ""}>Excluir</button>
       </div>
+      ${renderLoadReconciliation(load)}
       <p class="delivery-help">Confira, por produto, o que foi entregue, o que voltou ao depósito e o que faltou. Só a devolução física volta ao estoque.</p>
       <div class="order-lines">
         ${load.orders.map(item => renderLoadOrder(load, item)).join("")}
@@ -552,7 +558,8 @@ function renderLoadOrder(load, item) {
         : '<span class="meta">Aguardando saída da carga.</span>'
         : `<div class="meta">Recebido ${money(item.amountReceived)} · ${escapeHtml(item.paymentMethod)}</div>
            ${checked ? '<span class="badge green">Produtos conferidos</span>' : '<span class="meta">Histórico sem conferência por produto.</span>'}
-           ${checked && item.itemResults.some(x => Number(x.missingQuantity) > 0) ? '<span class="badge red">Falta registrada — veja a conferência da carga</span>' : ''}`}
+           ${checked && item.itemResults.some(x => Number(x.missingQuantity) > 0) ? '<span class="badge red">Falta registrada — veja a conferência da carga</span>' : ''}
+           ${checked ? `<div class="meta">Conferido por ${escapeHtml(item.checkedBy || 'Não registrado')} em ${checkedDateTime(item.deliveredAt)}</div>` : ''}`}
     </div></div>`;
 }
 
@@ -1614,6 +1621,11 @@ function reportLayout(content) {
         .loading-region-title { border: 2px solid #111; padding: 8px; margin: 18px 0 12px; font-size: 18px; text-transform: uppercase; }
         .loading-load-title { border-bottom: 1px solid #999; margin: 14px 0 8px; padding-bottom: 4px; font-size: 14px; }
         .strong-qty { font-size: 14px; font-weight: 800; }
+        .load-qr { display: flex; align-items: center; gap: 16px; border: 1px solid #999; padding: 12px; margin: 16px 0; break-inside: avoid; color: #111; background: #fff; }
+        .load-qr-code { flex: 0 0 38mm; width: 38mm; height: 38mm; }
+        .load-qr-code svg { width: 100%; height: 100%; display: block; }
+        .load-qr p, .load-qr a { font-size: 11px; margin: 6px 0; }
+        .load-qr-url { overflow-wrap: anywhere; }
         .actions { margin-bottom: 16px; }
         @media print { .actions { display: none; } body { margin: 12mm; } }
       </style>
@@ -1790,6 +1802,7 @@ function reportSingleLoad(id) {
   return {
     title: `Carga ${load.number} - ${load.region?.name ?? ""}`,
     body: `
+      ${renderLoadQr(load)}
       <div class="summary">
         <div><strong>Data</strong><br>${dateBR(load.scheduledDate)}</div>
         <div><strong>Veículo</strong><br>${escapeHtml(load.vehicle ? `${load.vehicle.name} - ${load.vehicle.plate}` : "-")}</div>
@@ -1873,6 +1886,7 @@ function reportLoadingLoad(id) {
 function renderLoadingLoadBody(load, showLoadTitle) {
   return `
       ${showLoadTitle ? `<h2 class="loading-load-title">Carregamento ${load.number} - ${escapeHtml(load.region?.name ?? "")}</h2>` : ""}
+      ${renderLoadQr(load)}
       <div class="summary">
         <div><strong>Carregamento</strong><br>${load.number} - ${escapeHtml(load.region?.name ?? "")}</div>
         <div><strong>Data</strong><br>${dateBR(load.scheduledDate)}</div>
@@ -1998,6 +2012,7 @@ async function refreshAll() {
       const failure = results.find(result => result.status === "rejected");
       if (failure) throw failure.reason;
       window.FortyAccess?.apply();
+      openLoadQrTarget();
       $("#syncStatus").textContent = `Atualizado às ${new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}`;
     } catch (error) {
       $("#syncStatus").textContent = "Falha ao atualizar. Tente novamente.";
@@ -2012,6 +2027,9 @@ async function refreshAll() {
 }
 
 async function init() {
+  window.addEventListener('hashchange', () => {
+    if (accessToken) refreshAll().catch(error => toast(error.message));
+  });
   wireAuthentication();
   wireInventory();
   wireProduction();

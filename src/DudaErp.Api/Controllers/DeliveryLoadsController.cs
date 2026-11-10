@@ -205,7 +205,7 @@ public sealed class DeliveryLoadsController(AppDbContext dbContext) : Controller
             (request.AmountReceived > 0 && request.PaymentMethod == PaymentMethod.None))
             return BadRequest(new { detail = "Revise o valor recebido e a forma de pagamento." });
 
-        if (deliveryLoad.InventoryTracked && request.Items is null)
+        if (request.Items is null)
             return BadRequest(new { detail = "Confira as quantidades entregues e devolvidas de cada produto." });
         if (request.Items is not null)
         {
@@ -234,6 +234,7 @@ public sealed class DeliveryLoadsController(AppDbContext dbContext) : Controller
         loadOrder.AmountReceived = request.AmountReceived;
         loadOrder.DeliveryNotes = request.DeliveryNotes?.Trim();
         loadOrder.DeliveredAt = DateTimeOffset.UtcNow;
+        loadOrder.CheckedBy = User?.Identity?.Name ?? "Sistema";
 
         loadOrder.Order!.Status = request.DeliveryStatus switch
         {
@@ -278,6 +279,8 @@ public sealed class DeliveryLoadsController(AppDbContext dbContext) : Controller
 
         await inventory.RecordDispatchAsync(load, User?.Identity?.Name ?? "Sistema", cancellationToken);
         load.Status = LoadStatus.Dispatched;
+        load.DispatchedAt = DateTimeOffset.UtcNow;
+        load.DispatchedBy = User?.Identity?.Name ?? "Sistema";
         foreach (var item in load.Orders)
         {
             item.Order!.Status = OrderStatus.Scheduled;

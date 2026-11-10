@@ -49,6 +49,7 @@
     document.querySelectorAll('.view').forEach(view => { view.hidden = !canView(view.id); });
   }
   function clear() {
+    qrSelectedLoadId = null;
     state.currentUser = null;
     for (const key of ['regions', 'sellers', 'customers', 'vehicles', 'products', 'orders', 'loads', 'payables', 'receivables', 'productionPlans', 'users']) state[key] = [];
     state.inventory = { items: [], movements: [] }; state.editing = {};

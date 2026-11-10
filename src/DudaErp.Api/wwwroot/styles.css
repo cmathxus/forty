@@ -227,6 +227,11 @@ form.panel > [data-cancel-edit] { justify-self: start; background: transparent; 
 .stock-number { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .stock-out { color: var(--red); }
 .stock-in { color: var(--green); }
+.load-reconciliation { margin-top: 18px; border: 1px solid var(--line); border-radius: 6px; }
+.load-reconciliation > summary { cursor: pointer; padding: 14px 16px; font-weight: 600; }
+.load-reconciliation > summary .badge { margin-left: 12px; }
+.load-reconciliation > p { margin: 0; padding: 0 16px 14px; }
+.shortage-row { background: #fff0f1; }
 .production-products { display: grid; gap: 10px; margin: 18px 0; }
 .production-products > div { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px 20px; padding-bottom: 10px; border-bottom: 1px solid var(--line); font-size: 13px; }
 .production-products strong { white-space: nowrap; font-size: 12px; }
@@ -533,3 +538,5 @@ body:has(#editModal.open), body:has(.profile-drawer[open]) { overflow: hidden; }
   .vale th, .vale td { font-size: 10px; }
   .vale-copy { margin-bottom: 10px; padding-bottom: 10px; }
 }
+.qr-load-context { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px; padding: 20px; border: 1px solid var(--line); border-radius: 12px; margin-bottom: 16px; }
+.qr-load-context p { margin: 6px 0 0; }

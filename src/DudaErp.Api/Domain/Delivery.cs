@@ -48,6 +48,8 @@ public sealed class DeliveryLoad : Entity
     public string? DriverName { get; set; }
     public LoadStatus Status { get; set; } = LoadStatus.Open;
     public bool InventoryTracked { get; set; }
+    public DateTimeOffset? DispatchedAt { get; set; }
+    public string? DispatchedBy { get; set; }
     public string? Notes { get; set; }
     public List<DeliveryLoadOrder> Orders { get; set; } = [];
 }
@@ -62,6 +64,7 @@ public sealed class DeliveryLoadOrder : Entity
     public PaymentMethod PaymentMethod { get; set; } = PaymentMethod.None;
     public decimal? AmountReceived { get; set; }
     public DateTimeOffset? DeliveredAt { get; set; }
+    public string? CheckedBy { get; set; }
     public string? DeliveryNotes { get; set; }
     public List<DeliveryItemResult> ItemResults { get; set; } = [];
 }

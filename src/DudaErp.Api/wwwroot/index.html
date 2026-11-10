@@ -248,7 +248,7 @@
           <h3>Cargas</h3>
           <span>Saída, retorno e recebido ficam no mesmo lugar</span>
         </div>
-        <div id="loadsList" class="list"></div>
+        <label class="check wide"><input id="loadMissingOnly" type="checkbox">Mostrar somente cargas com produtos faltantes</label><div id="loadsList" class="list"></div>
       </div>
     </section>
 
@@ -529,7 +529,7 @@
 <div class="form-actions wide"><button type="button" data-cancel-edit="stock">Cancelar</button><button class="primary" type="submit">Registrar movimento</button></div></form>
 <form id="deliveryCheckForm" class="panel">
 <p id="deliveryCheckContext" class="wide"></p><p id="deliveryLegacyHint" class="wide inventory-notice">Carga anterior ao controle de estoque: a conferência será registrada, sem alterar o saldo retroativamente.</p>
-<div class="wide"><h4 class="form-section-title">Conferência física dos produtos</h4><p>Informe a quantidade entregue ao cliente e a que voltou fisicamente ao depósito. A diferença aparece como faltante.</p><div class="card-actions"><button type="button" data-check-preset="delivered">Tudo entregue</button><button type="button" data-check-preset="returned">Tudo devolvido</button></div></div>
+<div class="wide"><h4 class="form-section-title">Conferência física dos produtos</h4><p>Informe a quantidade entregue ao cliente e a que voltou fisicamente ao depósito. A diferença aparece como faltante.</p><div class="card-actions"><button type="button" data-check-preset="notDelivered">Entrega não realizada — informar o que voltou</button><button type="button" data-check-preset="delivered">Tudo entregue</button><button type="button" data-check-preset="returned">Tudo devolvido</button></div></div>
 <div id="deliveryCheckItems" class="wide"></div>
 <fieldset class="form-section"><legend>Recebimento e observações</legend><div class="form-section-fields"><p id="deliveryCheckTotal" class="wide"></p><label>Valor recebido<input name="amountReceived" type="number" min="0" step="0.01" required placeholder="Ex.: 0"></label><label class="span-2">Forma de pagamento<select name="paymentMethod" required><option value="">Selecione forma de pagamento</option><option value="0">Sem recebimento</option><option value="1">Dinheiro</option><option value="2">Pix</option><option value="3">Boleto</option><option value="4">Cheque</option><option value="5">Cartão</option><option value="6">Transferência</option><option value="7">Outro</option></select></label><label class="wide">Observação / divergência<input name="deliveryNotes" maxlength="1000" placeholder="Obrigatória quando houver produto faltante"></label></div></fieldset>
 <div class="form-actions wide"><button type="button" data-cancel-edit="delivery">Cancelar</button><button class="primary" type="submit">Registrar conferência</button></div></form>
@@ -660,6 +660,8 @@
   <script src="vendor/flatpickr.min.js"></script>
   <script src="vendor/flatpickr-pt.js"></script>
   <script src="controls.js"></script>
+  <script src="vendor/qrcode-1.4.4.js"></script>
+  <script src="load-qr.js"></script>
   <script src="inventory.js"></script>
   <script src="production.js"></script>
   <script src="access.js"></script>

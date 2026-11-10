@@ -1,5 +1,35 @@
 const stockKinds = { Receipt: 'Entrada', Count: 'Contagem / ajuste', Dispatch: 'Saída de carga', Return: 'Devolução', Production: 'Produção' };
 const stockQuantity = value => Number(value).toLocaleString('pt-BR', { maximumFractionDigits: 3 });
+const checkedDateTime = value => value ? new Date(value).toLocaleString('pt-BR') : 'Não registrado';
+
+function loadProductReconciliation(load) {
+  const products = new Map();
+  for (const link of load.orders || []) for (const item of link.order?.items || []) {
+    const key = `${item.productId || item.productCode}:${item.unit}`;
+    if (!products.has(key)) products.set(key, { code: item.productCode, name: item.productName, unit: item.unit,
+      sent: 0, delivered: 0, returned: 0, missing: 0, pending: 0, historical: 0 });
+    const row = products.get(key); const quantity = Number(item.quantity);
+    row.sent += quantity;
+    const result = link.itemResults?.find(x => x.orderItemId === item.id);
+    if (result) { row.delivered += Number(result.deliveredQuantity); row.returned += Number(result.returnedQuantity); row.missing += Number(result.missingQuantity); }
+    else if (link.deliveryStatus === 'Pending') row.pending += quantity;
+    else row.historical += quantity;
+  }
+  return [...products.values()].sort((a, b) => String(a.code).localeCompare(String(b.code), 'pt-BR'));
+}
+
+function loadHasShortage(load) { return loadProductReconciliation(load).some(x => x.missing > 0); }
+
+function renderLoadProductTable(load) {
+  const rows = loadProductReconciliation(load);
+  return `<div class="stock-table-wrap"><table class="dashboard-table"><thead><tr><th>Produto</th><th>Unidade</th><th>${load.status === 'Open' ? 'A sair' : 'Saiu'}</th><th>Entregue</th><th>Voltou</th><th>Faltante</th><th>A conferir</th><th>Sem conferência histórica</th></tr></thead><tbody>${rows.map(x => `<tr class="${x.missing > 0 ? 'shortage-row' : ''}"><td>${escapeHtml(x.code)} — ${escapeHtml(x.name)}</td><td>${escapeHtml(x.unit)}</td><td>${stockQuantity(x.sent)}</td><td>${stockQuantity(x.delivered)}</td><td>${stockQuantity(x.returned)}</td><td class="${x.missing > 0 ? 'stock-out' : ''}"><strong>${stockQuantity(x.missing)}</strong></td><td>${stockQuantity(x.pending)}</td><td>${stockQuantity(x.historical)}</td></tr>`).join('')}</tbody></table></div>`;
+}
+
+function renderLoadReconciliation(load) {
+  const missing = loadHasShortage(load);
+  return `<details class="load-reconciliation" ${missing ? 'open' : ''}><summary>Saída e retorno por produto ${missing ? '<span class="badge red">Há produtos faltando</span>' : ''}</summary>
+    <p class="meta">Faltante = saiu − entregue − voltou. Produtos ainda não conferidos não são tratados como falta.</p>${renderLoadProductTable(load)}</details>`;
+}
 
 async function refreshInventory() {
   state.inventory = await api('/api/inventory');
@@ -80,10 +110,16 @@ function fillDeliveryPreset(preset) {
   $$('.reconciliation-row', form).forEach(row => {
     const item = link.order.items.find(x => x.id === row.dataset.itemId);
     $('[name=deliveredQuantity]', row).value = preset === 'delivered' ? item.quantity : 0;
-    $('[name=returnedQuantity]', row).value = preset === 'returned' ? item.quantity : 0;
+    $('[name=returnedQuantity]', row).value = preset === 'notDelivered' ? '' : preset === 'returned' ? item.quantity : 0;
   });
   form.dataset.dirty = 'true';
+  if (preset === 'notDelivered' || preset === 'returned') {
+    form.elements.amountReceived.value = '0';
+    form.elements.paymentMethod.value = '0';
+    window.FortyControls?.syncSelect(form.elements.paymentMethod);
+  }
   updateDeliveryCheck();
+  if (preset === 'notDelivered') $('[name=returnedQuantity]', form)?.focus();
 }
 
 function openDeliveryCheck(value) {
@@ -100,7 +136,7 @@ function openDeliveryCheck(value) {
   $('#deliveryCheckItems').innerHTML = link.order.items.map(item => `<div class="reconciliation-row" data-item-id="${item.id}">
     <div><strong>${escapeHtml(item.productCode)} — ${escapeHtml(item.productName)}</strong><span class="meta">Saída: ${stockQuantity(item.quantity)} ${escapeHtml(item.unit)}</span></div>
     <label>Entregue<input name="deliveredQuantity" aria-label="Entregue: ${escapeHtml(item.productCode)}" type="number" min="0" max="${item.quantity}" step="0.001" required></label>
-    <label>Devolvido ao depósito<input name="returnedQuantity" aria-label="Devolvido: ${escapeHtml(item.productCode)}" type="number" min="0" max="${item.quantity}" step="0.001" required></label>
+    <label>Voltou ao depósito<input name="returnedQuantity" aria-label="Voltou: ${escapeHtml(item.productCode)}" type="number" min="0" max="${item.quantity}" step="0.001" placeholder="Qtd. que voltou" required></label>
     <div class="reconciliation-shortage"><span>Faltante</span><strong class="reconciliation-missing">A conferir</strong></div></div>`).join('');
   window.FortyControls?.sync(form);
   updateDeliveryCheck();
@@ -108,6 +144,7 @@ function openDeliveryCheck(value) {
 }
 
 function wireInventory() {
+  $('#loadMissingOnly').addEventListener('change', renderLoads);
   $('#stockSearch').addEventListener('input', renderInventory);
   $('#stockForm').addEventListener('change', updateStockHint);
   $('#stockForm').addEventListener('submit', event => {
@@ -147,10 +184,11 @@ function reportReconciliation(id) {
     return `<tr><td>${link.order.number}</td><td>${escapeHtml(link.order.customer?.legalName)}</td><td>${escapeHtml(item.productCode)} — ${escapeHtml(item.productName)}</td>
       <td>${escapeHtml(item.unit)}</td><td>${stockQuantity(item.quantity)}</td><td>${result ? stockQuantity(result.deliveredQuantity) : '—'}</td>
       <td>${result ? stockQuantity(result.returnedQuantity) : '—'}</td><td>${result ? stockQuantity(result.missingQuantity) : '—'}</td>
-      <td>${result ? escapeHtml(link.deliveryNotes || 'Conferido') : link.deliveryStatus === 'Pending' ? 'A conferir' : 'Histórico sem conferência'}</td></tr>`;
+      <td>${result ? escapeHtml(link.deliveryNotes || 'Conferido') : link.deliveryStatus === 'Pending' ? 'A conferir' : 'Histórico sem conferência'}</td><td>${result ? escapeHtml(link.checkedBy || 'Não registrado') : '—'}</td><td>${result ? checkedDateTime(link.deliveredAt) : '—'}</td></tr>`;
   }));
-  return { title: `Conferência da carga ${load.number}`, body: `<p>Devolvido significa retorno físico ao depósito. Faltante = saída − entregue − devolvido. As quantidades respeitam a unidade de cada produto.</p>
-    <table><thead><tr><th>Pedido</th><th>Cliente</th><th>Produto</th><th>Unidade</th><th>Saída</th><th>Entregue</th><th>Devolvido</th><th>Faltante</th><th>Observação</th></tr></thead><tbody>${rows.join('')}</tbody></table>` };
+  return { title: `Conferência da carga ${load.number}`, body: `<p>Motorista: ${escapeHtml(load.driverName || 'Não informado')} · Veículo: ${escapeHtml(load.vehicle?.plate || 'Não informado')} · Região: ${escapeHtml(load.region?.name || 'Não informada')}</p><p>Saída registrada por ${escapeHtml(load.dispatchedBy || 'Não registrado')} · ${checkedDateTime(load.dispatchedAt)}</p>
+    <p>Voltou significa retorno físico ao depósito. Faltante = saída − entregue − voltou. As quantidades respeitam a unidade de cada produto.</p><h2>Resumo por produto</h2>${renderLoadProductTable(load)}<h2>Conferência por pedido</h2>
+    <table><thead><tr><th>Pedido</th><th>Cliente</th><th>Produto</th><th>Unidade</th><th>Saída</th><th>Entregue</th><th>Voltou</th><th>Faltante</th><th>Observação</th><th>Conferido por</th><th>Data da conferência</th></tr></thead><tbody>${rows.join('')}</tbody></table>` };
 }
 
 function reportInventory() {

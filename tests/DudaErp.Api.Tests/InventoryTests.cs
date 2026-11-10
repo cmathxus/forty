@@ -4,12 +4,40 @@ using DudaErp.Api.Data;
 using DudaErp.Api.Domain;
 using DudaErp.Api.Services;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Http;
+using System.Security.Claims;
 using Microsoft.EntityFrameworkCore;
 
 namespace DudaErp.Api.Tests;
 
 public sealed class InventoryTests
 {
+    [PostgresFact]
+    public async Task UndeliveredLoad_RecordsPhysicalReturnShortageAndOperator()
+    {
+        await using var database = await PostgresTestDatabase.CreateAsync();
+        var db = database.Db;
+        var (product, load, order) = await Seed(db, 10);
+        var inventory = new InventoryController(db);
+        Assert.IsType<OkObjectResult>(await inventory.Record(new(Guid.NewGuid(), product.Id, StockMovementKind.Count, 15, "Contagem inicial"), default));
+        var controller = new DeliveryLoadsController(db) { ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext {
+            User = new ClaimsPrincipal(new ClaimsIdentity([new Claim(ClaimTypes.Name, "Conferente QA")], "Bearer")) } } };
+        Assert.IsType<NoContentResult>(await controller.Dispatch(load.Id, default));
+        Assert.Equal("Conferente QA", load.DispatchedBy); Assert.NotNull(load.DispatchedAt);
+        var item = order.Items.Single();
+        Assert.IsType<BadRequestObjectResult>((await controller.CloseOrder(load.Id, order.Id,
+            new(DeliveryStatus.Returned, PaymentMethod.None, 0, "Retorno sem conferência"), default)).Result);
+        Assert.IsType<BadRequestObjectResult>((await controller.CloseOrder(load.Id, order.Id,
+            new(DeliveryStatus.Returned, PaymentMethod.None, 0, null, [new(item.Id, 0, 8)]), default)).Result);
+        Assert.IsType<OkObjectResult>((await controller.CloseOrder(load.Id, order.Id,
+            new(DeliveryStatus.Returned, PaymentMethod.None, 0, "Entrega não realizada; faltaram dois fardos no retorno", [new(item.Id, 0, 8)]), default)).Result);
+        var link = await db.DeliveryLoadOrders.Include(x => x.ItemResults).SingleAsync();
+        Assert.Equal("Conferente QA", link.CheckedBy); Assert.NotNull(link.DeliveredAt);
+        Assert.Equal(8, link.ItemResults.Single().ReturnedQuantity); Assert.Equal(2, link.ItemResults.Single().MissingQuantity);
+        Assert.Equal(13, await new InventoryService(db).BalanceAsync(product.Id, default));
+        Assert.Equal(LoadStatus.Closed, load.Status);
+    }
+
     [PostgresFact]
     public async Task ProductionPlan_DoesNotChangeStockUntilConfirmed_AndKeepsActualQuantities()
     {
