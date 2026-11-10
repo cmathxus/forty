@@ -544,3 +544,56 @@ body:has(#editModal.open), body:has(.profile-drawer[open]) { overflow: hidden; }
 .list-pagination > div { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; }
 .list-pagination button { min-height: 40px; padding: 10px 16px; }
 .list[aria-busy="true"] { opacity: .55; pointer-events: none; }
+#loads > header { margin-bottom: 24px; }
+#loads > .list-panel { padding: 24px; }
+#loadListTools { margin-bottom: 24px; padding-bottom: 20px; border-bottom: 1px solid var(--line); }
+#loadListTools .check { width: fit-content; margin: 0; padding: 0; gap: 12px; min-height: 24px; line-height: 1.5; }
+#loadListTools .check input { margin: 0; flex-shrink: 0; }
+#loadsList { gap: 14px; }
+.load-list-row { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr) minmax(160px, auto) 24px; align-items: center; gap: 28px; width: 100%; min-height: 88px; text-align: left; padding: 20px 24px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; white-space: normal; }
+.load-list-row > span { min-width: 0; line-height: 1.5; overflow-wrap: anywhere; }
+.load-list-row > span:first-child, .load-list-row > span:nth-child(2) { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; }
+.load-list-row > .load-stage-label { justify-self: end; text-align: center; }
+.load-list-row > span:last-child { justify-self: center; }
+.load-list-row:hover { border-color: #a6b0df; background: #fafbff; }
+.load-list-row > span > span { display: block; color: var(--muted); font-size: 12px; margin: 0; }
+.load-stage-label { color: var(--muted); font-size: 12px; background: var(--panel-soft); padding: 7px 11px; border-radius: 6px; }
+.load-stage-label.stage-1 { color: var(--brand); background: var(--brand-soft); }
+.load-stage-label.stage-2 { color: var(--amber); background: #fff4df; }
+.load-stage-label.stage-3 { color: var(--green); background: #eef7f1; }
+#newLoadButton { margin-bottom: 20px; }
+.load-detail > .text-button { margin-bottom: 22px; }
+.load-detail-heading, .load-next-step, .load-orders-heading { display: flex; justify-content: space-between; align-items: center; gap: 20px; }
+.load-detail-heading h3 { font-size: 22px; margin: 0; }
+.load-detail-heading h3 span { font-size: 16px; font-weight: 400; color: var(--muted); }
+.load-detail-heading p, .load-next-step p { margin: 8px 0 0; color: var(--muted); font-size: 13px; }
+.load-options { position: relative; flex-shrink: 0; }
+.load-options > summary { cursor: pointer; padding: 11px 16px; border: 1px solid var(--line); border-radius: 8px; }
+.load-options > div { position: absolute; right: 0; top: 100%; z-index: 5; min-width: 230px; display: grid; padding: 8px; gap: 4px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); box-shadow: 0 12px 32px #20274c18; }
+.load-options button { text-align: left; justify-content: flex-start; border-color: transparent; }
+.load-progress { display: flex; padding: 0; margin: 30px 0; list-style: none; gap: 12px; }
+.load-progress li { display: flex; align-items: center; gap: 8px; flex: 1; border-bottom: 2px solid var(--line); padding: 0 0 14px; font-size: 13px; color: var(--muted); }
+.load-progress li > span { display: grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; background: var(--panel-soft); font-size: 11px; }
+.load-progress li.current { color: var(--brand); border-color: var(--brand); font-weight: 600; }
+.load-progress li.current > span { background: var(--brand); color: white; }
+.load-progress li.done { color: var(--green); }
+.load-next-step { padding: 22px; border-radius: 10px; background: var(--panel-soft); margin-bottom: 28px; }
+.load-next-step > button { flex-shrink: 0; }
+.load-orders-heading { margin-bottom: 12px; }
+.load-orders-heading h4 { font-size: 16px; margin: 0; }
+.load-orders-heading > span { color: var(--muted); font-size: 12px; }
+.load-history { margin-top: 22px; border-top: 1px solid var(--line); padding-top: 18px; }
+.load-history > summary { cursor: pointer; padding: 8px 0; color: var(--muted); }
+.load-detail .load-reconciliation { margin-top: 24px; }
+@media (max-width: 700px) {
+  #loads > .list-panel { padding: 16px; }
+  #loadListTools { margin-bottom: 20px; padding-bottom: 16px; }
+  #loadsList { gap: 12px; }
+  .load-list-row { grid-template-columns: minmax(0, 1fr) auto; gap: 16px; padding: 18px; }
+  .load-list-row > span:nth-child(2) { grid-row: 2; grid-column: 1 / -1; font-size: 12px; }
+  .load-list-row > span:last-child { display: none; }
+  .load-detail-heading { align-items: flex-start; flex-wrap: wrap; }
+  .load-next-step { align-items: stretch; flex-direction: column; padding: 18px; }
+  .load-progress { gap: 6px; }
+  .load-progress li { align-items: flex-start; flex-direction: column; font-size: 11px; }
+}

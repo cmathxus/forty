@@ -474,51 +474,7 @@ function renderOrders() {
 }
 
 function renderLoads() {
-  const list = $("#loadsList");
-  list.innerHTML = "";
-  const onlyShortages = $("#loadMissingOnly")?.checked;
-  const qrId = typeof qrSelectedLoadId === 'undefined' ? null : qrSelectedLoadId;
-  const visibleLoads = state.loads.filter(load => qrId ? load.id === qrId : load.orders.length > 0 && (!onlyShortages || loadHasShortage(load)));
-  if (qrId) list.innerHTML = `<div class="qr-load-context"><div><strong>Carga aberta pelo romaneio</strong><p>Confira os pedidos abaixo. Escanear o QR Code não altera o estoque.</p></div><button type="button" id="showAllQrLoads">Ver todas as cargas</button></div>`;
-  $('#showAllQrLoads')?.addEventListener('click', closeLoadQrTarget);
-
-  if (visibleLoads.length === 0) {
-    list.innerHTML = onlyShortages ? `<div class="empty-state">Nenhuma carga com falta registrada.</div>` : `<div class="card"><strong>Nenhuma carga criada</strong><div class="meta">Selecione pedidos confirmados e monte uma carga.</div></div>`;
-    return;
-  }
-
-  for (const load of visibleLoads) {
-    const total = load.orders.reduce((sum, item) => sum + Number(item.order?.totalAmount ?? 0), 0);
-    const received = load.orders.reduce((sum, item) => sum + Number(item.amountReceived ?? 0), 0);
-    const card = document.createElement("div");
-    card.className = "card";
-    card.innerHTML = `
-      <div class="card-header">
-        <div>
-          <strong>Carga ${load.number} - ${escapeHtml(load.region?.name ?? "")}</strong>
-          <div class="meta">${dateBR(load.scheduledDate)} | ${escapeHtml(load.vehicle ? `${load.vehicle.name} - ${load.vehicle.plate}` : "Sem veículo")} | Motorista: ${escapeHtml(load.driverName || "-")}</div>
-          <div class="meta">${load.orders.length} pedidos | Total ${money(total)} | Recebido ${money(received)}</div>
-          ${load.dispatchedAt ? `<div class="meta">Saída registrada por ${escapeHtml(load.dispatchedBy || 'Não registrado')} em ${checkedDateTime(load.dispatchedAt)}</div>` : ''}
-          ${loadReturnDetails(load)}
-        </div>
-        ${load.returnedAt && load.status === 'Dispatched' ? '<span class="badge amber">Retornou · a conferir</span>' : statusBadge(load.status)}
-      </div>
-      <div class="card-actions">
-        ${load.status === "Open" ? `<button type="button" data-dispatch="${load.id}">Marcar saída pra rua</button>` : ""}
-        ${['Dispatched', 'Closed'].includes(load.status) && !load.returnedAt ? `<button type="button" data-load-return="${load.id}">Registrar retorno da carga</button>` : ''}
-        <button type="button" data-report-load="${load.id}">Relatório da carga</button>
-        <button type="button" data-report-loading="${load.id}">Carregamento expedição</button><button type="button" data-report-reconciliation="${load.id}">Conferência da carga</button>
-        <button type="button" data-edit-load="${load.id}" ${load.status !== "Open" ? "disabled" : ""}>Editar</button>
-        <button type="button" data-delete-load="${load.id}" ${load.status !== "Open" ? "disabled" : ""}>Excluir</button>
-      </div>
-      ${renderLoadReconciliation(load)}
-      <p class="delivery-help">Confira, por produto, o que foi entregue, o que voltou ao depósito e o que faltou. Só a devolução física volta ao estoque.</p>
-      <div class="order-lines">
-        ${load.orders.map(item => renderLoadOrder(load, item)).join("")}
-      </div>
-    `;
-    list.append(card);
-  }
+  renderLoadWorkspace();
 }
 
 function renderLoadOrder(load, item) {
@@ -531,7 +487,7 @@ function renderLoadOrder(load, item) {
     </div>
     <div class="delivery-check-summary">
       ${item.deliveryStatus === "Pending" ? load.status === "Dispatched"
-        ? `<button type="button" class="primary" data-reconcile="${load.id}:${order.id}">Conferir entrega e retorno</button>`
+        ? `<button type="button" data-reconcile="${load.id}:${order.id}">Conferir pedido</button>`
         : '<span class="meta">Aguardando saída da carga.</span>'
         : `<div class="meta">Recebido ${money(item.amountReceived)} · ${escapeHtml(item.paymentMethod)}</div>
            ${checked ? '<span class="badge green">Produtos conferidos</span>' : '<span class="meta">Histórico sem conferência por produto.</span>'}
@@ -836,6 +792,7 @@ async function openCreateForm(key) {
 }
 
 function openEditModal(form, title) {
+  if (form.id === 'loadForm') form.hidden = false;
   window.FortyControls?.closeAll();
   editModal.returnFocus = document.activeElement;
   if (editModal.form && editModal.form !== form) {
@@ -863,6 +820,7 @@ function openEditModal(form, title) {
 
 function closeEditModal() {
   if (!editModal.form) return;
+  if (editModal.form.id === 'loadForm') editModal.form.hidden = true;
   window.FortyControls?.closeAll();
 
   if (editModal.placeholder?.parentNode) {
@@ -1324,6 +1282,8 @@ function wireActions() {
     if (target.dataset?.productionReport) return openReport("productionPlan", target.dataset.productionReport);
     if (target.dataset?.productionCancel) return cancelProductionPlan(target.dataset.productionCancel);
     if (target.hasAttribute?.('data-remove-production-item')) { target.closest('.production-item-row').remove(); $('#productionPlanForm').dataset.dirty = 'true'; return; }
+    if (target.dataset?.openLoad) return openLoadDetails(target.dataset.openLoad);
+    if (target.hasAttribute?.('data-close-load')) return closeLoadDetails();
     if (target.dataset?.reconcile) return openDeliveryCheck(target.dataset.reconcile);
     if (target.dataset?.loadReturn) return openLoadReturn(target.dataset.loadReturn);
     if (target.dataset?.checkPreset) return fillDeliveryPreset(target.dataset.checkPreset);

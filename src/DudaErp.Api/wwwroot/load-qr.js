@@ -27,7 +27,7 @@ function presentLoadQrTarget(load = null) {
   // A lista fica abaixo do formulário de nova carga na tela normal.
   // Na entrada pelo romaneio, a conferência precisa ser a primeira informação.
   const form = $('#loadForm');
-  if (form) form.hidden = Boolean(load);
+  if (form) form.hidden = !(typeof editModal !== 'undefined' && editModal.form === form);
   const heading = $('#loads > header h2');
   if (heading?.dataset) {
     heading.dataset.qrOriginalText ??= heading.textContent;
@@ -73,6 +73,7 @@ function openLoadQrTarget() {
 
 function closeLoadQrTarget() {
   qrSelectedLoadId = null;
+  if (typeof selectedLoadId !== 'undefined') selectedLoadId = null;
   presentLoadQrTarget();
   window.history.replaceState(null, '', window.location.pathname + window.location.search);
   renderLoads();

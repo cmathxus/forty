@@ -34,7 +34,7 @@ test('QR após login coloca a conferência em destaque, sem exibir nova carga an
   ui.run('openLoadQrTarget()'); // Atualização periódica mantém a apresentação.
   assert.equal(ui.form.hidden, true);
   ui.run('closeLoadQrTarget()');
-  assert.equal(ui.form.hidden, false);
+  assert.equal(ui.form.hidden, true); // Nova carga agora abre somente em modal.
   assert.equal(ui.heading.textContent, 'Programação de rua');
   assert.equal(ui.window.location.hash, '');
 });
@@ -44,7 +44,7 @@ test('remover o destino do QR restaura a tela normal', () => {
   ui.run("accessToken='sessao';state.currentUser={};openLoadQrTarget()");
   ui.window.location.hash = '';
   ui.run('openLoadQrTarget()');
-  assert.equal(ui.form.hidden, false);
+  assert.equal(ui.form.hidden, true);
   assert.equal(ui.heading.textContent, 'Programação de rua');
   assert.equal(ui.run('qrSelectedLoadId'), null);
 });

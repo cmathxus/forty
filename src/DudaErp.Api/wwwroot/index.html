@@ -219,12 +219,13 @@
     <section id="loads" class="view">
       <header>
         <div>
-          <h2>Programação de rua</h2>
-          <p>Monte a carga por região, veículo e motorista. Depois faça a baixa da entrega.</p>
+          <h2>Cargas e entregas</h2>
+          <p>Acompanhe cada carga, da preparação à conferência do retorno.</p>
         </div>
       </header>
 
-      <form id="loadForm" class="panel">
+      <button id="newLoadButton" type="button" class="primary" data-create="load">+ Nova carga</button>
+      <form id="loadForm" class="panel" hidden>
         <div class="section-title wide">
           <h3>Nova carga</h3>
           <span>Somente pedidos confirmados aparecem aqui</span>
@@ -244,11 +245,7 @@
       </form>
 
       <div class="panel list-panel">
-        <div class="section-title wide">
-          <h3>Cargas</h3>
-          <span>Saída, retorno e recebido ficam no mesmo lugar</span>
-        </div>
-        <label class="check wide"><input id="loadMissingOnly" type="checkbox">Mostrar somente cargas com produtos faltantes</label><div id="loadsList" class="list"></div>
+        <div id="loadListTools"><label class="check wide"><input id="loadMissingOnly" type="checkbox">Somente cargas com faltas</label></div><div id="loadsList" class="list"></div>
       </div>
     </section>
 
@@ -684,6 +681,7 @@
   <script src="controls.js"></script>
   <script src="vendor/qrcode-1.4.4.js"></script>
   <script src="load-qr.js"></script>
+  <script src="loads.js"></script>
   <script src="pagination.js"></script>
   <script src="inventory.js"></script>
   <script src="production.js"></script>

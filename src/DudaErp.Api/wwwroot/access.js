@@ -50,6 +50,7 @@
     document.querySelectorAll('.view').forEach(view => { view.hidden = !canView(view.id); });
   }
   function clear() {
+    selectedLoadId = null;
     clearListPagination();
     qrSelectedLoadId = null;
     state.currentUser = null;
