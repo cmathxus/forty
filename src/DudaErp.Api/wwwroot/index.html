@@ -13,6 +13,14 @@
   <link rel="stylesheet" href="controls.css">
 </head>
 <body class="auth-locked">
+  <div id="appLoading" class="app-loading loading-screen" role="status" aria-live="polite" aria-atomic="true">
+    <div class="loading-content">
+      <div class="loading-brand" aria-hidden="true">FORTY<span>.</span></div>
+      <div class="loading-track" aria-hidden="true"><span></span></div>
+      <p id="loadingMessage">Preparando seu espaço de trabalho…</p>
+      <span id="loadingHint" hidden>A primeira conexão pode levar alguns segundos.</span>
+    </div>
+  </div>
   <section id="loginScreen" class="login-screen" aria-labelledby="loginTitle">
     <div class="login-art" aria-hidden="true"><span class="login-wordmark">FORTY<span>.</span></span><div class="shipping-art"><svg viewBox="0 0 460 340"><path d="m80 100 130-68 130 68-130 69zM80 100v140l130 70 130-70V100M210 169v141M145 65l130 70v48M80 239l75-41M340 240l-75-42"></path><path class="art-route" d="M22 280h45M370 78h68M365 270h60M55 35h30"></path><path class="art-arrow" d="M280 280h140m-25-25 25 25-25 25"></path></svg></div><p>Do pedido à entrega.</p><span class="login-art-caption">Pedidos, cargas e financeiro.</span></div><form id="loginForm" class="login-card">
       <span class="login-context">Acesso ao FORTY</span><h2 id="loginTitle">Acesse sua<br>operação.</h2><p class="login-description">Entre na sua conta para acessar a operação.</p>
@@ -672,6 +680,7 @@
     </form>
   </dialog>
   <script src="config.js"></script>
+  <script src="loading.js"></script>
   <script src="auth-session.js"></script>
   <script src="vendor/tom-select.complete.min.js"></script>
   <script src="vendor/flatpickr.min.js"></script>

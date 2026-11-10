@@ -68,6 +68,12 @@ function toast(message) {
 }
 
 async function api(path, options = {}) {
+  const endLoading = window.FortyLoading?.begin({ message: options.method && options.method !== 'GET' ? 'Salvando informações…' : 'Carregando dados…' });
+  try { return await apiRequest(path, options); }
+  finally { endLoading?.(); }
+}
+
+async function apiRequest(path, options = {}) {
   const requestGeneration = authGeneration;
   let response;
   try {
@@ -2059,6 +2065,7 @@ function wireAuthentication() {
     button.disabled = true;
     button.textContent = "Entrando…";
     $("#loginError").textContent = "";
+    const endLoading = window.FortyLoading?.begin({ screen: true, message: 'Entrando no seu espaço de trabalho…' });
     try {
       const result = await api("/api/auth/login", { method: "POST", body: JSON.stringify(formJson(form)) });
       authGeneration++;
@@ -2068,7 +2075,7 @@ function wireAuthentication() {
       document.body.classList.remove("auth-locked");
       try { await refreshAll(); } catch (error) { toast(error.message); }
     } catch (error) { $("#loginError").textContent = error.message; }
-    finally { button.disabled = false; button.textContent = "Entrar"; }
+    finally { endLoading?.(); button.disabled = false; button.textContent = "Entrar"; }
   });
   $("#logout").addEventListener("click", logout);
   $("#changePassword").addEventListener("click", () => {
@@ -2102,4 +2109,4 @@ function wireAuthentication() {
 init().catch(error => {
   toast("Erro ao carregar dados iniciais.");
   console.error(error);
-});
+}).finally(() => window.FortyLoading?.ready());
