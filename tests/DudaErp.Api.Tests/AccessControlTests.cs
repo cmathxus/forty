@@ -21,6 +21,63 @@ namespace DudaErp.Api.Tests;
 public sealed class AccessControlTests
 {
     [Fact]
+    public async Task CustomPermissionsReplaceTemplateAndRevokeExistingSession()
+    {
+        await using var factory = new Factory();
+        using var admin = await factory.Login(AccessRules.Admin);
+        var email = "custom@example.invalid";
+        var create = new { name = "Custom", email, role = AccessRules.Billing, password = "test-password-123",
+            customPermissions = new[] { "products.read", "payables.read", "payables.check" } };
+        var created = await admin.PostAsJsonAsync("/api/users", create);
+        Assert.Equal(HttpStatusCode.OK, created.StatusCode);
+        var id = (await created.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid();
+        using var user = await factory.LoginEmail(email, create.password);
+        Assert.Equal(HttpStatusCode.OK, (await user.GetAsync("/api/financial/payables")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await user.GetAsync("/api/customers")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await user.GetAsync("/api/users/permissions")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await user.PostAsJsonAsync("/api/catalog/products", new { })).StatusCode);
+        var payable = $"/api/financial/payables/{Guid.NewGuid()}";
+        Assert.Equal(HttpStatusCode.NotFound, (await user.PostAsync(payable + "/check", null)).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await user.PostAsJsonAsync(payable + "/pay", new { })).StatusCode);
+        var me = await user.GetFromJsonAsync<JsonElement>("/api/auth/me");
+        Assert.Equal(new[] { "payables.check", "payables.read", "products.read" },
+            me.GetProperty("permissions").EnumerateArray().Select(x => x.GetString()));
+        var update = new { create.name, create.email, create.role, isActive = true, customPermissions = new[] { "users.manage" } };
+        Assert.Equal(HttpStatusCode.BadRequest, (await admin.PutAsJsonAsync($"/api/users/{id}", update)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await admin.PutAsJsonAsync($"/api/users/{id}", update with { customPermissions = Array.Empty<string>() })).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await user.GetAsync("/api/auth/me")).StatusCode);
+        using var empty = await factory.LoginEmail(email, create.password);
+        Assert.Equal(HttpStatusCode.Forbidden, (await empty.GetAsync("/api/financial/payables")).StatusCode);
+        var restore = new UsersController.UpdateUserRequest(create.name, create.email, create.role, true);
+        Assert.Equal(HttpStatusCode.OK, (await admin.PutAsJsonAsync($"/api/users/{id}", restore)).StatusCode);
+        using var restored = await factory.LoginEmail(email, create.password);
+        Assert.Equal(HttpStatusCode.OK, (await restored.GetAsync("/api/customers")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await restored.GetAsync("/api/financial/payables")).StatusCode);
+    }
+
+    [Fact]
+    public async Task PayableAuthorCannotPayOrCheckEvenAsAdmin()
+    {
+        await using var factory = new Factory();
+        using var author = await factory.Login(AccessRules.Admin);
+        using var second = await factory.Login(AccessRules.Finance);
+        using var buyer = await factory.Login(AccessRules.Buyer);
+        using var created = await author.PostAsJsonAsync("/api/financial/payables",
+            new { description = "Tarifa de boleto", amount = 5, dueDate = "2026-11-13" });
+        Assert.Equal(HttpStatusCode.Created, created.StatusCode);
+        var id = (await created.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid();
+        var pay = $"/api/financial/payables/{id}/pay";
+        var check = $"/api/financial/payables/{id}/check";
+        Assert.Equal(HttpStatusCode.Conflict, (await author.PostAsJsonAsync(pay, new { date = "2026-11-13" })).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await buyer.PostAsJsonAsync(pay, new { date = "2026-11-13" })).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await second.PostAsync(check, null)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await second.PostAsJsonAsync(pay, new { date = "2026-11-13" })).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await author.PostAsync(check, null)).StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, (await second.PostAsync(check, null)).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await second.PostAsync(check, null)).StatusCode);
+    }
+
+    [Fact]
     public async Task ListPages_ValidateLimits_AndEnforceSectorPermissions()
     {
         await using var factory = new Factory();
@@ -29,14 +86,20 @@ public sealed class AccessControlTests
         foreach (var role in AccessRules.Roles)
         {
             using var client = await factory.Login(role);
-            Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/api/lists/products")).StatusCode);
-            Assert.Equal(role is AccessRules.Admin or AccessRules.Billing ? HttpStatusCode.OK : HttpStatusCode.Forbidden,
+            Assert.Equal(role == AccessRules.Buyer ? HttpStatusCode.Forbidden : HttpStatusCode.OK, (await client.GetAsync("/api/lists/products")).StatusCode);
+            Assert.Equal(role is AccessRules.Admin or AccessRules.Billing or AccessRules.Finance ? HttpStatusCode.OK : HttpStatusCode.Forbidden,
                 (await client.GetAsync("/api/lists/customers")).StatusCode);
             foreach (var area in new[] { "sellers", "regions", "vehicles", "users" })
-                Assert.Equal(role == AccessRules.Admin ? HttpStatusCode.OK : HttpStatusCode.Forbidden,
+                Assert.Equal(role == AccessRules.Admin || (area != "users" && role is AccessRules.Billing or AccessRules.Finance or AccessRules.Dispatch)
+                    ? HttpStatusCode.OK : HttpStatusCode.Forbidden,
                     (await client.GetAsync($"/api/lists/{area}")).StatusCode);
         }
         using var admin = await factory.Login(AccessRules.Admin);
+        foreach (var query in new[] { "page=0", "pageSize=200", "stage=4", "regionId=invalid", "from=2026-11-10&to=2026-11-09", "search=" + new string('a',201) })
+            Assert.Equal(HttpStatusCode.BadRequest, (await admin.GetAsync("/api/delivery-loads/page?" + query)).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await anonymous.GetAsync("/api/delivery-loads/page")).StatusCode);
+        using var production = await factory.Login(AccessRules.Production);
+        Assert.Equal(HttpStatusCode.Forbidden, (await production.GetAsync("/api/delivery-loads/page")).StatusCode);
         foreach (var query in new[] { "page=0", "page=-1", "page=1000001", "pageSize=200", "pageSize=0", "search=" + new string('a', 201) })
             Assert.Equal(HttpStatusCode.BadRequest, (await admin.GetAsync("/api/lists/products?" + query)).StatusCode);
     }
@@ -106,26 +169,34 @@ public sealed class AccessControlTests
                 Quantity = 5, Reason = "Entrada QA", SourceKey = "qa", RecordedBy = "Admin" });
             await db.SaveChangesAsync();
         }
-        var everyone = new[] { "/api/catalog/products", "/api/inventory", "/api/auth/me" };
+        var everyone = new[] { "/api/catalog/products", "/api/inventory" };
         var areas = new Dictionary<string, string[]> {
             [AccessRules.Admin] = ["/api/users", "/api/customers", "/api/orders/page", "/api/financial/payables", "/api/financial/receivables", "/api/delivery-loads", "/api/production", "/api/catalog/regions", "/api/catalog/sellers", "/api/catalog/vehicles"],
-            [AccessRules.Billing] = ["/api/customers", "/api/orders/page", "/api/financial/payables", "/api/financial/receivables", "/api/catalog/regions", "/api/catalog/sellers", "/api/catalog/vehicles"],
+            [AccessRules.Billing] = ["/api/customers", "/api/orders/page", "/api/catalog/regions", "/api/catalog/sellers", "/api/catalog/vehicles"],
+            [AccessRules.Finance] = ["/api/customers", "/api/orders/page", "/api/financial/payables", "/api/financial/receivables", "/api/catalog/regions", "/api/catalog/sellers", "/api/catalog/vehicles"],
+            [AccessRules.Buyer] = ["/api/financial/payables"],
             [AccessRules.Dispatch] = ["/api/orders/page", "/api/delivery-loads", "/api/catalog/regions", "/api/catalog/sellers", "/api/catalog/vehicles"],
             [AccessRules.Production] = ["/api/production"]
         };
         var writeAreas = new Dictionary<string, string[]> {
-            [AccessRules.Admin] = ["/api/users", "/api/customers", "/api/orders", "/api/financial/payables", "/api/catalog/products", "/api/production", "/api/delivery-loads", "/api/inventory/movements"],
-            [AccessRules.Billing] = ["/api/customers", "/api/orders", "/api/financial/payables"],
+            [AccessRules.Admin] = ["/api/users", "/api/customers", "/api/orders", "/api/financial/payables", "/api/financial/receivables", "/api/catalog/products", "/api/production", "/api/delivery-loads", "/api/inventory/movements"],
+            [AccessRules.Billing] = ["/api/customers", "/api/orders", "/api/financial/receivables"],
+            [AccessRules.Finance] = ["/api/financial/payables", "/api/financial/receivables"],
+            [AccessRules.Buyer] = [],
             [AccessRules.Dispatch] = ["/api/delivery-loads"],
             [AccessRules.Production] = ["/api/production"]
         };
         foreach (var role in AccessRules.Roles)
         {
             using var client = await factory.Login(role);
-            foreach (var path in everyone) Assert.Equal(HttpStatusCode.OK, (await client.GetAsync(path)).StatusCode);
-            var stock = await client.GetFromJsonAsync<JsonElement>("/api/inventory");
-            Assert.Equal(5, stock.GetProperty("items")[0].GetProperty("quantity").GetDecimal());
-            Assert.Equal(role == AccessRules.Admin ? 1 : 0, stock.GetProperty("movements").GetArrayLength());
+            foreach (var path in everyone)
+                Assert.Equal(role == AccessRules.Buyer ? HttpStatusCode.Forbidden : HttpStatusCode.OK, (await client.GetAsync(path)).StatusCode);
+            if (role != AccessRules.Buyer)
+            {
+                var stock = await client.GetFromJsonAsync<JsonElement>("/api/inventory");
+                Assert.Equal(5, stock.GetProperty("items")[0].GetProperty("quantity").GetDecimal());
+                Assert.Equal(role == AccessRules.Admin ? 1 : 0, stock.GetProperty("movements").GetArrayLength());
+            }
             foreach (var path in areas[AccessRules.Admin])
                 Assert.Equal(areas[role].Contains(path) ? HttpStatusCode.OK : HttpStatusCode.Forbidden, (await client.GetAsync(path)).StatusCode);
             foreach (var path in writeAreas[AccessRules.Admin])
@@ -134,6 +205,11 @@ public sealed class AccessControlTests
                 using var response = await client.PostAsync(path, JsonContent.Create((object?)null));
                 Assert.Equal(writeAreas[role].Contains(path) ? HttpStatusCode.BadRequest : HttpStatusCode.Forbidden, response.StatusCode);
             }
+            var missingOrder = $"/api/orders/{Guid.NewGuid()}";
+            Assert.Equal(role is AccessRules.Admin or AccessRules.Finance ? HttpStatusCode.NotFound : HttpStatusCode.Forbidden,
+                (await client.PostAsync(missingOrder + "/approve", null)).StatusCode);
+            Assert.Equal(role is AccessRules.Admin or AccessRules.Billing ? HttpStatusCode.NotFound : HttpStatusCode.Forbidden,
+                (await client.PostAsync(missingOrder + "/bill", null)).StatusCode);
             var me = await client.GetFromJsonAsync<JsonElement>("/api/auth/me");
             Assert.Equal(role, me.GetProperty("role").GetString());
             Assert.Equal(AccessRules.ForRole(role), me.GetProperty("permissions").EnumerateArray().Select(x => x.GetString()));

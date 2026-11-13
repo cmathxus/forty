@@ -54,8 +54,8 @@ builder.Services.AddAuthorization(options =>
     options.DefaultPolicy = new AuthorizationPolicyBuilder().RequireAuthenticatedUser().RequireRole(AccessRules.Roles).Build();
     // Endpoints novos exigem administrador até terem uma permissão explícita.
     options.FallbackPolicy = new AuthorizationPolicyBuilder().RequireAuthenticatedUser().RequireRole(AccessRules.Admin).Build();
-    foreach (var (permission, roles) in AccessRules.Permissions)
-        options.AddPolicy(permission, policy => policy.RequireAuthenticatedUser().RequireRole(roles));
+    foreach (var permission in AccessRules.PolicyNames)
+        options.AddPolicy(permission, policy => policy.RequireAuthenticatedUser().RequireClaim(AccessRules.PermissionClaim, permission));
 });
 builder.Services.AddRateLimiter(options =>
 {
@@ -91,13 +91,18 @@ app.Use(async (context, next) =>
         var db = context.RequestServices.GetRequiredService<AppDbContext>();
         var idText = context.User.FindFirstValue(ClaimTypes.NameIdentifier);
         var stampText = context.User.FindFirstValue("security_stamp");
-        if (!Guid.TryParse(idText, out var id) || !Guid.TryParse(stampText, out var stamp) ||
-            !await db.Users.AsNoTracking().AnyAsync(x => x.Id == id && x.IsActive && x.SecurityStamp == stamp &&
-                x.Role == context.User.FindFirstValue(ClaimTypes.Role), context.RequestAborted))
+        var role = context.User.FindFirstValue(ClaimTypes.Role);
+        var account = Guid.TryParse(idText, out var id) && Guid.TryParse(stampText, out var stamp)
+            ? await db.Users.AsNoTracking().Where(x => x.Id == id && x.IsActive && x.SecurityStamp == stamp && x.Role == role)
+                .Select(x => new { x.Role, x.CustomPermissions }).SingleOrDefaultAsync(context.RequestAborted)
+            : null;
+        if (account is null)
         {
             context.Response.StatusCode = StatusCodes.Status401Unauthorized;
             return;
         }
+        context.User.AddIdentity(new ClaimsIdentity(AccessRules.Effective(account.Role, account.CustomPermissions)
+            .Select(permission => new Claim(AccessRules.PermissionClaim, permission))));
         var sessionText = context.User.FindFirstValue("session_id");
         if (sessionText is not null && (!Guid.TryParse(sessionText, out var sessionId) ||
             !await db.AuthSessions.AsNoTracking().AnyAsync(x => x.Id == sessionId && x.UserId == id && !x.Revoked &&

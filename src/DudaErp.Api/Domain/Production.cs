@@ -6,6 +6,8 @@ public sealed class ProductionPlan : Entity
 {
     public long Number { get; set; }
     public Guid RequestId { get; set; }
+    public Guid? OrderId { get; set; }
+    public long? OrderNumber { get; set; }
     public DateOnly ScheduledDate { get; set; }
     public ProductionPlanStatus Status { get; set; }
     public string? Notes { get; set; }

@@ -8,11 +8,11 @@ using Microsoft.EntityFrameworkCore;
 namespace DudaErp.Api.Controllers;
 
 [ApiController]
-[Authorize(Policy = "customers.manage")]
 [Route("api/customers")]
 public sealed class CustomersController(AppDbContext dbContext) : ControllerBase
 {
     [HttpGet]
+    [Authorize(Policy = "customers.read")]
     public Task<List<Customer>> GetAll(CancellationToken cancellationToken) =>
         dbContext.Customers.AsNoTracking()
             .Include(x => x.Region)
@@ -21,6 +21,7 @@ public sealed class CustomersController(AppDbContext dbContext) : ControllerBase
             .ToListAsync(cancellationToken);
 
     [HttpPost]
+    [Authorize(Policy = "customers.create")]
     public async Task<ActionResult<Customer>> Create(CreateCustomerRequest request, CancellationToken cancellationToken)
     {
         if (!await dbContext.Regions.AnyAsync(x => x.Id == request.RegionId && x.IsActive, cancellationToken))
@@ -47,6 +48,7 @@ public sealed class CustomersController(AppDbContext dbContext) : ControllerBase
     }
 
     [HttpGet("{id:guid}")]
+    [Authorize(Policy = "customers.read")]
     public async Task<ActionResult<Customer>> GetById(Guid id, CancellationToken cancellationToken)
     {
         var customer = await dbContext.Customers.AsNoTracking()
@@ -56,6 +58,7 @@ public sealed class CustomersController(AppDbContext dbContext) : ControllerBase
     }
 
     [HttpPut("{id:guid}")]
+    [Authorize(Policy = "customers.edit")]
     public async Task<ActionResult<Customer>> Update(Guid id, CreateCustomerRequest request, CancellationToken cancellationToken)
     {
         var customer = await dbContext.Customers.SingleOrDefaultAsync(x => x.Id == id, cancellationToken);
@@ -95,6 +98,7 @@ public sealed class CustomersController(AppDbContext dbContext) : ControllerBase
     }
 
     [HttpDelete("{id:guid}")]
+    [Authorize(Policy = "customers.delete")]
     public async Task<IActionResult> Delete(Guid id, CancellationToken cancellationToken)
     {
         var customer = await dbContext.Customers.SingleOrDefaultAsync(x => x.Id == id, cancellationToken);

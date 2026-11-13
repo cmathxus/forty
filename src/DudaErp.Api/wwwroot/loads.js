@@ -8,8 +8,76 @@ function loadStage(load) {
 
 function loadStageLabel(load) { return ['Preparação', 'Em rota', 'Conferência', 'Concluída'][loadStage(load)]; }
 
+const loadListPage = { items: [], total: 0, page: 1, totalPages: 1, generation: 0, loading: false, error: '' };
+let loadFilterTimer;
+
+async function refreshLoadPage(page = loadListPage.page) {
+  if (!hasPermission('loads.read')) return;
+  const generation = ++loadListPage.generation, session = authGeneration;
+  loadListPage.loading = true; loadListPage.error = ''; loadListPage.items = [];
+  renderLoadWorkspace();
+  const query = new URLSearchParams({ page: String(page), pageSize: '20' });
+  for (const [id,key] of [['Search','search'],['Status','stage'],['Region','regionId'],['Vehicle','vehicleId'],['Driver','driver'],['From','from'],['To','to']]) {
+    const value = $(`#loadFilter${id}`).value.trim();
+    if (value) query.set(key,value);
+  }
+  if ($('#loadMissingOnly').checked) query.set('shortages','true');
+  try {
+    const result = await api(`/api/delivery-loads/page?${query}`);
+    if (generation !== loadListPage.generation || session !== authGeneration) return;
+    Object.assign(loadListPage, result);
+    const cache = new Map(state.loads.map(load => [load.id,load]));
+    result.items.forEach(load => cache.set(load.id,load)); state.loads = [...cache.values()];
+  } catch (error) {
+    if (generation !== loadListPage.generation || session !== authGeneration) return;
+    loadListPage.items = []; loadListPage.error = error.message;
+  } finally {
+    if (generation === loadListPage.generation && session === authGeneration) {
+      loadListPage.loading = false; renderLoadWorkspace();
+    }
+  }
+}
+
+async function refreshLoadFilterOptions() {
+  const options = await api('/api/delivery-loads/filter-options');
+  fillSelect('#loadFilterRegion', options.regions, row => row.name, true);
+  fillSelect('#loadFilterVehicle', options.vehicles, row => `${row.name} · ${row.plate}`, true);
+  for (const [selector,label] of [['#loadFilterRegion','Todas as regiões'],['#loadFilterVehicle','Todos os veículos']]) {
+    $(`${selector} option[value='']`).textContent = label;
+    window.FortyControls?.syncSelect($(selector));
+  }
+}
+
+function queueLoadFilter() {
+  if (!state.currentUser || !hasPermission('loads.read')) return;
+  clearTimeout(loadFilterTimer);
+  loadListPage.generation++; // Respostas anteriores não podem sobrescrever novos critérios.
+  loadFilterTimer = setTimeout(() => refreshLoadPage(1), 250);
+}
+function wireLoadFilters() {
+  for (const id of ['Search', 'Status', 'Region', 'Driver', 'Vehicle', 'From', 'To']) {
+    const field = $(`#loadFilter${id}`);
+    field.addEventListener(field.type === 'search' ? 'input' : 'change', queueLoadFilter);
+  }
+  $('#clearLoadFilters').addEventListener('click', () => {
+    for (const id of ['Search', 'Status', 'Region', 'Driver', 'Vehicle', 'From', 'To']) {
+      const field = $(`#loadFilter${id}`);
+      if (field._flatpickr) field._flatpickr.clear();
+      else field.value = '';
+      window.FortyControls?.syncSelect(field);
+    }
+    $('#loadMissingOnly').checked = false;
+    clearTimeout(loadFilterTimer);
+    refreshLoadPage(1);
+  });
+  $('#loadsPagination').addEventListener('click', event => {
+    const button = event.target.closest('[data-load-page]');
+    if (button && !button.disabled) refreshLoadPage(Number(button.dataset.loadPage));
+  });
+}
+
 function openLoadDetails(id) {
-  if (!hasPermission('loads.manage')) return;
+  if (!hasPermission('loads.read')) return;
   selectedLoadId = id;
   renderLoads();
   $('#loadsList').scrollIntoView({ block: 'start', behavior: 'instant' });
@@ -26,15 +94,21 @@ function renderLoadWorkspace() {
   const id = qrSelectedLoadId || selectedLoadId;
   const load = state.loads.find(x => x.id === id);
   $('#loadListTools').hidden = Boolean(load);
-  $('#newLoadButton').hidden = Boolean(load);
+  const newLoad = $('#newLoadButton');
+  newLoad.hidden = Boolean(load) || !hasPermission('loads.create');
+  const pagination = $('#loadsPagination');
+  pagination.hidden = Boolean(load);
   if (load) { list.innerHTML = renderLoadDetails(load); return; }
   selectedLoadId = null;
-  const rows = state.loads.filter(x => !$('#loadMissingOnly').checked || loadHasShortage(x));
+  const rows = loadListPage.items;
+  $('#loadFilterCount').textContent = loadListPage.loading ? 'Buscando…' : `${loadListPage.total} cargas encontradas`;
+  pagination.innerHTML = `<span>Página ${loadListPage.page} de ${loadListPage.totalPages}</span><div><button type="button" data-load-page="${loadListPage.page-1}" ${loadListPage.loading || loadListPage.page <= 1 ? 'disabled' : ''}>Anterior</button><button type="button" data-load-page="${loadListPage.page+1}" ${loadListPage.loading || loadListPage.page >= loadListPage.totalPages ? 'disabled' : ''}>Próxima</button></div>`;
+  if (loadListPage.error) { list.textContent = loadListPage.error; return; }
   list.innerHTML = rows.map(x => `<button type="button" class="load-list-row" data-open-load="${x.id}">
     <span><strong>Carga ${x.number}</strong><span>${escapeHtml(x.region?.name || 'Sem região')} · ${dateBR(x.scheduledDate)}</span></span>
     <span>${escapeHtml(x.driverName || 'Motorista não informado')}<span>${escapeHtml(x.vehicle?.plate || 'Sem veículo')}</span></span>
     <span class="load-stage-label stage-${loadStage(x)}">${loadStageLabel(x)}${loadHasShortage(x) ? ' · Com faltas' : ''}</span><span aria-hidden="true">→</span>
-  </button>`).join('') || '<div class="empty-state">Nenhuma carga encontrada. Crie uma carga para começar.</div>';
+  </button>`).join('') || `<div class="empty-state">${loadListPage.loading ? 'Buscando cargas…' : 'Nenhuma carga corresponde aos filtros. Altere a busca ou crie uma carga.'}</div>`;
 }
 
 function renderLoadDetails(load) {

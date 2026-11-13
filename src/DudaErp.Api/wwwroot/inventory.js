@@ -148,7 +148,7 @@ function loadReturnDetails(load) {
 }
 
 async function openLoadReturn(id) {
-  if (!hasPermission('loads.manage')) return;
+  if (!hasPermission('loads.return')) return;
   const load = state.loads.find(x => x.id === id);
   if (!load || !['Dispatched', 'Closed'].includes(load.status) || load.returnedAt) return toast('Esta carga não está disponível para registrar retorno.');
   const form = $('#loadReturnForm');
@@ -170,7 +170,7 @@ function wireInventory() {
       returnedAt: new Date(`${form.elements.returnDate.value}T${form.elements.returnTime.value}`).toISOString()
     }));
   });
-  $('#loadMissingOnly').addEventListener('change', renderLoads);
+  $('#loadMissingOnly').addEventListener('change', queueLoadFilter);
   $('#stockSearch').addEventListener('input', renderInventory);
   $('#stockForm').addEventListener('change', updateStockHint);
   $('#stockForm').addEventListener('submit', event => {

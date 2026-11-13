@@ -9,15 +9,16 @@ using Microsoft.EntityFrameworkCore;
 namespace DudaErp.Api.Controllers;
 
 [ApiController]
-[Authorize(Policy = "production.manage")]
 [Route("api/production")]
 public sealed class ProductionController(AppDbContext db) : ControllerBase
 {
     [HttpGet]
+    [Authorize(Policy = "production.read")]
     public Task<List<ProductionPlan>> Get(CancellationToken ct) => db.ProductionPlans.AsNoTracking().Include(x => x.Items)
         .OrderBy(x => x.Status).ThenByDescending(x => x.Number).Take(200).ToListAsync(ct);
 
     [HttpPost]
+    [Authorize(Policy = "production.create")]
     public async Task<IActionResult> Create(CreateProductionPlanRequest request, CancellationToken ct)
     {
         if (request.RequestId == Guid.Empty || request.ScheduledDate is null || request.Items is null || request.Items.Count is 0 or > 100 ||
@@ -31,10 +32,22 @@ public sealed class ProductionController(AppDbContext db) : ControllerBase
         await using var transaction = await new InventoryService(db).BeginWriteAsync(ct);
         var existing = await db.ProductionPlans.AsNoTracking().Include(x => x.Items).SingleOrDefaultAsync(x => x.RequestId == request.RequestId, ct);
         if (existing is not null) return Ok(existing);
+        Order? order = null;
+        if (request.OrderNumber is not null)
+        {
+            order = await db.Orders.Include(x => x.Items).SingleOrDefaultAsync(x => x.Number == request.OrderNumber, ct);
+            if (order is null || order.ApprovedAt is null || order.BilledAt is not null || order.Status != OrderStatus.Confirmed)
+                return Conflict(new { detail = "Para programar a produção de um pedido, use um pedido aprovado pelo Financeiro e ainda não faturado." });
+            if (request.Items.Any(item => order.Items.All(line => line.ProductId != item.ProductId)))
+                return BadRequest(new { detail = "A produção vinculada deve usar produtos do pedido." });
+            if (await db.ProductionPlans.AnyAsync(x => x.OrderId == order.Id && x.Status == ProductionPlanStatus.Planned, ct))
+                return Conflict(new { detail = "Este pedido já tem uma programação de produção pendente." });
+        }
         var ids = request.Items.Select(x => x.ProductId).ToArray();
         var products = await db.Products.Where(x => ids.Contains(x.Id) && x.IsActive).ToDictionaryAsync(x => x.Id, ct);
         if (products.Count != ids.Length) return BadRequest(new { detail = "Um produto não foi encontrado ou está inativo." });
         var plan = new ProductionPlan { RequestId = request.RequestId, Number = (await db.ProductionPlans.MaxAsync(x => (long?)x.Number, ct) ?? 0) + 1,
+            OrderId = order?.Id, OrderNumber = order?.Number,
             ScheduledDate = request.ScheduledDate.Value, Notes = request.Notes?.Trim(), CreatedBy = User?.Identity?.Name ?? "Sistema",
             Items = request.Items.Select(x => new ProductionPlanItem { ProductId = x.ProductId, ProductCode = products[x.ProductId].Code,
                 ProductName = products[x.ProductId].Name, Unit = products[x.ProductId].Unit, PlannedQuantity = x.Quantity }).ToList() };
@@ -45,6 +58,7 @@ public sealed class ProductionController(AppDbContext db) : ControllerBase
     }
 
     [HttpPost("{id:guid}/complete")]
+    [Authorize(Policy = "production.complete")]
     public async Task<IActionResult> Complete(Guid id, CompleteProductionPlanRequest request, CancellationToken ct)
     {
         await using var transaction = await new InventoryService(db).BeginWriteAsync(ct);
@@ -78,6 +92,7 @@ public sealed class ProductionController(AppDbContext db) : ControllerBase
     }
 
     [HttpPost("{id:guid}/cancel")]
+    [Authorize(Policy = "production.cancel")]
     public async Task<IActionResult> Cancel(Guid id, CancellationToken ct)
     {
         await using var transaction = await new InventoryService(db).BeginWriteAsync(ct);

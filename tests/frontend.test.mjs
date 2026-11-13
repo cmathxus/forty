@@ -15,7 +15,7 @@ const paginationSource = readFileSync(new URL('../src/DudaErp.Api/wwwroot/pagina
 function setupPages() {
   const ui = setup(); ui.context.URLSearchParams = URLSearchParams;
   vm.runInContext(paginationSource, ui.context);
-  ui.run(`accessToken='token';state.currentUser={permissions:['customers.manage']};renderPagination=()=>{};
+  ui.run(`accessToken='token';state.currentUser={permissions:['customers.read']};renderPagination=()=>{};
     renderCustomersList=()=>{window.rendered=listRows('customers').map(row=>row.id)}`);
   return ui;
 }
@@ -47,13 +47,38 @@ test('resposta antiga de busca não sobrescreve a nova e resposta de outra sess�
   assert.equal(ui.run(`listRows('customers')[0].id`), 'nova');
 });
 
+test('pedidos enviam busca e situação ao backend sem filtrar o cache local', async () => {
+  const ui=setupPages(); let path;
+  ui.elements.set('#orderStatusFilter',{value:'Scheduled'});
+  ui.elements.set('#orderApprovalFilter',{value:'true'});
+  ui.elements.set('#orderDeliveryFilter',{value:'false'});
+  ui.context.fetchPage=async url=>{path=url;return {items:[{id:'resultado-api'}],total:1,page:1,totalPages:1};};
+  ui.run(`state.currentUser={permissions:['orders.commercial']};api=fetchPage;renderOrders=()=>{};listPage('orders').search='cliente & vendedor';state.orders=[{id:'cache'}]`);
+  await ui.run(`refreshList('orders',1)`);
+  const query=new URL(path,'https://test.invalid').searchParams;
+  assert.equal(query.get('status'),'Scheduled');assert.equal(query.get('search'),'cliente & vendedor');
+  assert.equal(query.get('approved'), 'true'); assert.equal(query.get('delivered'), 'false');
+  assert.deepEqual(Array.from(ui.run(`listRows('orders')`),row=>row.id),['resultado-api']);
+});
+
+test('QR carrega o detalhe por ID mesmo quando a carga não está na página retornada', async () => {
+  const ui=setup(); vm.runInContext(qrSource,ui.context);
+  const id='11111111-2222-3333-4444-555555555555', paths=[];
+  ui.context.window.location={hash:`#conferencia=${id}`};
+  ui.context.request=async path=>{ paths.push(path);return path.endsWith('/summary') ? {preparing:25,onRoute:1} : {id,number:99,orders:[]}; };
+  ui.run(`api=request;refreshLoadPage=async()=>{};refreshLoadFilterOptions=async()=>{};renderLoads=()=>{};renderMetrics=()=>{};state.loads=[]`);
+  await ui.run('refreshLoads()');
+  assert(paths.includes(`/api/delivery-loads/${id}`));assert(!paths.includes('/api/delivery-loads'));
+  assert.equal(ui.run('state.loads[0].id'),id);
+});
+
 test('digitar busca volta à primeira página e agrupa digitação antes de chamar a API', async () => {
   const ui = setupPages(); const handlers = {}, pending = new Map(); let timerId = 0, calls = 0;
   ui.context.setTimeout = callback => { pending.set(++timerId, callback); return timerId; };
   ui.context.clearTimeout = id => pending.delete(id);
-  for (const key of ['customers','products','sellers','regions','vehicles','users']) {
+  for (const key of ['orders','customers','products','sellers','regions','vehicles','users']) {
     const input = { value: '', setAttribute() {}, addEventListener: (_event, handler) => handlers[key] = handler };
-    ui.elements.set(key === 'users' ? '#userSearch' : `[data-filter='${key}']`, input);
+    ui.elements.set(key === 'orders' ? '#orderSearch' : key === 'users' ? '#userSearch' : `[data-filter='${key}']`, input);
   }
   ui.context.fetchPage = async () => { calls++; return { items: [], total: 0, page: 1, totalPages: 1 }; };
   ui.run(`api=fetchPage;listPage('customers').page=7;wireListPagination()`);
@@ -98,7 +123,7 @@ test('leitura do QR preserva destino no login e abre somente a carga autorizada'
   ui.run('openLoadQrTarget()');
   assert.equal(ui.run('qrSelectedLoadId'), null);
   assert.equal(ui.context.window.location.hash, `#conferencia=${id}`);
-  ui.run(`accessToken='token';state.currentUser={permissions:['loads.manage']};state.loads=[{id:'${id}'}];openLoadQrTarget()`);
+  ui.run(`accessToken='token';state.currentUser={permissions:['loads.read']};state.loads=[{id:'${id}'}];openLoadQrTarget()`);
   assert.equal(ui.run('qrSelectedLoadId'), id);
   assert.equal(ui.context.window.openedView, 'loads');
   ui.run('closeLoadQrTarget()');
@@ -108,11 +133,11 @@ test('leitura do QR preserva destino no login e abre somente a carga autorizada'
 test('QR rejeita perfil sem permissão, carga ausente e identificador inválido sem gravar baixa', () => {
   const id = '11111111-2222-3333-4444-555555555555';
   const ui = setupQr(`https://cmathxus.github.io/forty/#conferencia=${id}`);
-  ui.run(`accessToken='token';state.currentUser={permissions:['production.manage']};openLoadQrTarget()`);
+  ui.run(`accessToken='token';state.currentUser={permissions:['production.read']};openLoadQrTarget()`);
   assert.match(ui.context.window.message, /não tem acesso/);
   assert.equal(ui.run('qrSelectedLoadId'), null);
   ui.context.window.location.hash = `conferencia=${id}`;
-  ui.run(`state.currentUser={permissions:['loads.manage']};openLoadQrTarget()`);
+  ui.run(`state.currentUser={permissions:['loads.read']};openLoadQrTarget()`);
   assert.match(ui.context.window.message, /não encontrada/);
   ui.context.window.location.hash = 'conferencia=abc';
   ui.run('openLoadQrTarget()');
@@ -144,7 +169,7 @@ test('registro de chegada abre vazio e distingue retorno físico do horário da 
   const form = { dataset: {}, elements: { returnDate: { value: '2026-01-01' }, returnTime: { value: '10:00' } },
     reset() { this.elements.returnDate.value=''; this.elements.returnTime.value=''; } };
   ui.elements.set('#loadReturnForm', form);
-  ui.run(`state.currentUser={permissions:['loads.manage']};state.loads=[{id:'load',number:42,status:'Dispatched',driverName:'Motorista'}];
+  ui.run(`state.currentUser={permissions:['loads.return']};state.loads=[{id:'load',number:42,status:'Dispatched',driverName:'Motorista'}];
     openEditModal=()=>{};openLoadReturn('load')`);
   assert.equal(form.elements.returnDate.value, ''); assert.equal(form.elements.returnTime.value, '');
   assert.equal(form.dataset.loadId, 'load');
@@ -167,22 +192,23 @@ test('atalho de entrega não realizada zera entregue e pede contagem física do 
 test('menus, atalhos e ações respeitam os acessos confirmados para cada setor', () => {
   const ui = setup();
   vm.runInContext(accessSource, ui.context);
-  ui.run(`state.currentUser = {permissions:['catalog.read','stock.read','production.manage']}`);
+  ui.run(`state.currentUser = {permissions:['products.read','stock.read','production.read']}`);
   assert.equal(ui.run(`window.FortyAccess.home()`), 'production');
   assert.equal(ui.run(`window.FortyAccess.canView('production')`), true);
   assert.equal(ui.run(`window.FortyAccess.canView('products')`), true);
   for (const view of ['users','payables','customers','orders','loads']) assert.equal(ui.run(`window.FortyAccess.canView('${view}')`), false);
   assert.equal(ui.run(`window.FortyAccess.canUse({dataset:{editProduct:'x'}})`), false);
   assert.equal(ui.run(`window.FortyAccess.canCreate('stock')`), false);
-  ui.run(`state.currentUser = {permissions:['catalog.read','stock.read','catalog.references','loads.manage','orders.read']}`);
+  ui.run(`state.currentUser = {permissions:['products.read','stock.read','loads.read','loads.create','orders.read']}`);
   assert.equal(ui.run(`window.FortyAccess.home()`), 'loads');
   assert.equal(ui.run(`window.FortyAccess.canCreate('load')`), true);
   assert.equal(ui.run(`window.FortyAccess.canCreate('order')`), false);
   assert.equal(ui.run(`window.FortyAccess.canReport('reconciliation')`), true);
   assert.equal(ui.run(`window.FortyAccess.canReport('salesPosition')`), false);
-  ui.run(`state.currentUser = {permissions:['orders.manage','customers.manage','finance.manage']}`);
+  ui.run(`state.currentUser = {permissions:['orders.commercial','orders.create','customers.read','customers.edit','receivables.create']}`);
   assert.equal(ui.run(`window.FortyAccess.home()`), 'dashboard');
-  assert.equal(ui.run(`window.FortyAccess.canView('payables')`), true);
+  assert.equal(ui.run(`window.FortyAccess.canView('payables')`), false);
+  assert.equal(ui.run(`window.FortyAccess.canCreate('receivable')`), true);
   assert.equal(ui.run(`window.FortyAccess.canUse({dataset:{editCustomer:'x'}})`), true);
   assert.equal(ui.run(`window.FortyAccess.canView('users')`), false);
 });

@@ -106,7 +106,7 @@ public sealed record RecordStockRequest(Guid RequestId, Guid ProductId,
 
 public sealed record ProductionPlanItemRequest(Guid ProductId, decimal Quantity);
 public sealed record CreateProductionPlanRequest(Guid RequestId, DateOnly? ScheduledDate,
-    [MaxLength(1000)] string? Notes, IReadOnlyCollection<ProductionPlanItemRequest> Items);
+    [MaxLength(1000)] string? Notes, IReadOnlyCollection<ProductionPlanItemRequest> Items, long? OrderNumber = null);
 public sealed record CompleteProductionPlanRequest(DateOnly? ProductionDate,
     IReadOnlyCollection<ProductionPlanItemRequest> Items);
 

@@ -1,29 +1,30 @@
 (() => {
   const views = {
-    dashboard: 'orders.manage', orders: 'orders.manage', loads: 'loads.manage', inventory: 'stock.read', production: 'production.manage',
-    payables: 'finance.manage', receivables: 'finance.manage', customers: 'customers.manage', products: 'catalog.read',
-    sellers: 'catalog.manage', regions: 'catalog.manage', vehicles: 'catalog.manage', users: 'users.manage',
-    reportOrders: 'orders.manage', reportSalesPosition: 'orders.manage', reportLoads: 'loads.manage', reportLoading: 'loads.manage',
-    reportCustomers: 'customers.manage', reportProducts: 'catalog.read'
+    dashboard: 'orders.commercial', noAccess: null, orders: 'orders.commercial', loads: 'loads.read', inventory: 'stock.read', production: 'production.read',
+    payables: 'payables.read', receivables: 'receivables.read', customers: 'customers.read', products: 'products.read',
+    sellers: 'sellers.read', regions: 'regions.read', vehicles: 'vehicles.read', users: 'users.manage',
+    reportOrders: 'orders.commercial', reportSalesPosition: 'orders.commercial', reportLoads: 'loads.read', reportLoading: 'loads.read',
+    reportCustomers: 'customers.read', reportProducts: 'products.read'
   };
-  const creates = { order: 'orders.manage', load: 'loads.manage', stock: 'stock.manage', productionPlan: 'production.manage',
-    customer: 'customers.manage', product: 'catalog.manage', seller: 'catalog.manage', region: 'catalog.manage', vehicle: 'catalog.manage',
-    payable: 'finance.manage', receivable: 'finance.manage', user: 'users.manage' };
-  const reports = { inventory: 'stock.read', productionPlan: 'production.manage', reconciliation: 'loads.manage',
-    orders: 'orders.manage', salesPosition: 'orders.manage', loads: 'loads.manage', load: 'loads.manage', loading: 'loads.manage',
-    loadingLoad: 'loads.manage', customers: 'customers.manage', products: 'catalog.read' };
-  const actions = { editCustomer: 'customers.manage', deleteCustomer: 'customers.manage', editProduct: 'catalog.manage', deleteProduct: 'catalog.manage',
-    editSeller: 'catalog.manage', deleteSeller: 'catalog.manage', editRegion: 'catalog.manage', deleteRegion: 'catalog.manage',
-    editVehicle: 'catalog.manage', deleteVehicle: 'catalog.manage', editOrder: 'orders.manage', deleteOrder: 'orders.manage', vale: 'orders.manage',
-    editLoad: 'loads.manage', deleteLoad: 'loads.manage', dispatch: 'loads.manage', reconcile: 'loads.manage',
-    loadReturn: 'loads.manage',
-    reportLoad: 'loads.manage', reportLoading: 'loads.manage', reportReconciliation: 'loads.manage',
-    editPayable: 'finance.manage', deletePayable: 'finance.manage', payPayable: 'finance.manage',
-    editReceivable: 'finance.manage', deleteReceivable: 'finance.manage', receiveReceivable: 'finance.manage',
-    productionComplete: 'production.manage', productionReport: 'production.manage', productionCancel: 'production.manage',
+  const creates = { order: 'orders.create', load: 'loads.create', stock: 'stock.manage', productionPlan: 'production.create',
+    customer: 'customers.create', product: 'products.create', seller: 'sellers.create', region: 'regions.create', vehicle: 'vehicles.create',
+    payable: 'payables.create', receivable: 'receivables.create', user: 'users.manage' };
+  const reports = { inventory: 'stock.read', productionPlan: 'production.read', reconciliation: 'loads.read',
+    orders: 'orders.commercial', salesPosition: 'orders.commercial', loads: 'loads.read', load: 'loads.read', loading: 'loads.read',
+    loadingLoad: 'loads.read', customers: 'customers.read', products: 'products.read' };
+  const actions = { editCustomer: 'customers.edit', deleteCustomer: 'customers.delete', editProduct: 'products.edit', deleteProduct: 'products.delete',
+    editSeller: 'sellers.edit', deleteSeller: 'sellers.delete', editRegion: 'regions.edit', deleteRegion: 'regions.delete',
+    editVehicle: 'vehicles.edit', deleteVehicle: 'vehicles.delete', editOrder: 'orders.edit', deleteOrder: 'orders.delete', vale: 'orders.commercial',
+    approveOrder: 'orders.approve', billOrder: 'orders.bill', checkPayable: 'payables.check', customerFinance: 'finance.customer',
+    editLoad: 'loads.edit', deleteLoad: 'loads.delete', dispatch: 'loads.dispatch', reconcile: 'loads.reconcile',
+    loadReturn: 'loads.return',
+    reportLoad: 'loads.read', reportLoading: 'loads.read', reportReconciliation: 'loads.read',
+    editPayable: 'payables.edit', deletePayable: 'payables.delete', payPayable: 'payables.pay',
+    editReceivable: 'receivables.edit', deleteReceivable: 'receivables.delete', receiveReceivable: 'receivables.receive',
+    productionComplete: 'production.complete', productionReport: 'production.read', productionCancel: 'production.cancel',
     editUser: 'users.manage', resetUserPassword: 'users.manage' };
 
-  const canView = view => Boolean(views[view] && hasPermission(views[view]));
+  const canView = view => view === 'noAccess' ? Boolean(state.currentUser) : Boolean(views[view] && hasPermission(views[view]));
   const canCreate = key => Boolean(creates[key] && hasPermission(creates[key]));
   const canReport = type => Boolean(reports[type] && hasPermission(reports[type]));
   function canUse(element) {
@@ -50,6 +51,16 @@
     document.querySelectorAll('.view').forEach(view => { view.hidden = !canView(view.id); });
   }
   function clear() {
+    state.loadSummary = null;
+    loadListPage.generation++; loadListPage.items = []; loadListPage.total = 0; loadListPage.page = 1;
+    loadListPage.totalPages = 1; loadListPage.loading = false; loadListPage.error = '';
+    clearTimeout(loadFilterTimer);
+    document.querySelectorAll('#loadListTools input, #loadListTools select').forEach(field => {
+      if (field.type === 'checkbox') field.checked = false;
+      else if (field._flatpickr) field._flatpickr.clear();
+      else field.value = '';
+      window.FortyControls?.syncSelect(field);
+    });
     selectedLoadId = null;
     clearListPagination();
     qrSelectedLoadId = null;
@@ -73,5 +84,6 @@
     }))).observe(document.body, { childList: true, subtree: true });
   }
   window.FortyAccess = { apply, clear, canUse, canView, canCreate, canReport, observe,
-    home: () => hasPermission('orders.manage') ? 'dashboard' : hasPermission('loads.manage') ? 'loads' : hasPermission('production.manage') ? 'production' : 'inventory' };
+    home: () => ['dashboard', 'loads', 'production', 'payables', ...Object.keys(views)]
+      .find(view => view !== 'noAccess' && canView(view)) || 'noAccess' };
 })();

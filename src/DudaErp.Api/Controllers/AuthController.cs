@@ -116,7 +116,7 @@ public sealed class AuthController(AppDbContext db, PasswordHasher<AppUser> hash
     [HttpGet("me")]
     public IActionResult Me() => Ok(new { id = User.FindFirstValue(ClaimTypes.NameIdentifier), name = User.Identity!.Name,
         email = User.FindFirstValue(ClaimTypes.Email), role = User.FindFirstValue(ClaimTypes.Role),
-        permissions = AccessRules.ForRole(User.FindFirstValue(ClaimTypes.Role)) });
+        permissions = User.FindAll(AccessRules.PermissionClaim).Select(x => x.Value).ToArray() });
 
     [HttpPost("password")]
     public async Task<IActionResult> ChangePassword(PasswordRequest request, CancellationToken ct)

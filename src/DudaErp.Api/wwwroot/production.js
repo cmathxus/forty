@@ -6,7 +6,7 @@ async function refreshProduction() {
 function renderProduction() {
   const names = { Planned: 'A produzir', Completed: 'Concluída', Cancelled: 'Cancelada' };
   $('#productionPlans').innerHTML = state.productionPlans.map(plan => `<div class="card">
-    <div class="card-header"><div><strong>Produção ${plan.number}</strong><div class="meta">Programada para ${dateBR(plan.scheduledDate)} · ${escapeHtml(plan.createdBy)}</div></div>
+    <div class="card-header"><div><strong>Produção ${plan.number}</strong><div class="meta">Programada para ${dateBR(plan.scheduledDate)} · ${escapeHtml(plan.createdBy)}${plan.orderNumber != null ? ` · Pedido ${plan.orderNumber}` : ''}</div></div>
     <span class="badge ${plan.status === 'Completed' ? 'green' : plan.status === 'Planned' ? 'amber' : ''}">${names[plan.status] || escapeHtml(plan.status)}</span></div>
     <div class="production-products">${plan.items.map(item => `<div><span>${escapeHtml(item.productCode)} — ${escapeHtml(item.productName)}</span><strong>${stockQuantity(item.plannedQuantity)} ${escapeHtml(item.unit)} a produzir${plan.status === 'Completed' ? ` · ${stockQuantity(item.producedQuantity)} produzido` : ''}</strong></div>`).join('')}</div>
     ${plan.notes ? `<p class="meta">${escapeHtml(plan.notes)}</p>` : ''}
@@ -58,7 +58,7 @@ function wireProduction() {
     if (!items.length) return toast('Adicione pelo menos um produto à lista.');
     if (new Set(items.map(x => x.productId)).size !== items.length) return toast('Agrupe a quantidade em uma única linha por produto.');
     submitJson(form, '/api/production', () => ({ requestId: form.dataset.requestId, scheduledDate: form.elements.scheduledDate.value,
-      notes: form.elements.notes.value, items }));
+      notes: form.elements.notes.value, orderNumber: form.elements.orderNumber?.value ? Number(form.elements.orderNumber.value) : null, items }));
   });
   $('#productionCompletionForm').addEventListener('submit', async event => {
     event.preventDefault(); const form = event.target;

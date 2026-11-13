@@ -19,6 +19,12 @@ public sealed class Order : Entity
     public Guid SellerId { get; set; }
     public Seller? Seller { get; set; }
     public OrderStatus Status { get; set; } = OrderStatus.Confirmed;
+    public bool RequiresCommercialWorkflow { get; set; }
+    public DateTimeOffset? ApprovedAt { get; set; }
+    public Guid? ApprovedById { get; set; }
+    public string? ApprovedBy { get; set; }
+    public DateTimeOffset? BilledAt { get; set; }
+    public bool IsReadyForLoad => Status == OrderStatus.Confirmed && (!RequiresCommercialWorkflow || BilledAt is not null);
     public bool IsFiscalInvoiceRequested { get; set; }
     public DateOnly? DueDate { get; set; }
     public string? PaymentCondition { get; set; }

@@ -27,23 +27,40 @@ public sealed class InventoryService(AppDbContext db)
             throw new InvalidOperationException("Informe uma quantidade válida, com até três casas decimais.");
     }
 
-    public async Task RecordDispatchAsync(DeliveryLoad load, string actor, CancellationToken ct)
+    public async Task EnsureStockAsync(IEnumerable<OrderItem> items, CancellationToken ct)
     {
-        var groups = load.Orders.SelectMany(x => x.Order!.Items).GroupBy(x => x.ProductId).ToArray();
-        if (groups.Length == 0) throw new InvalidOperationException("A carga não tem itens para saída.");
+        var groups = items.GroupBy(x => x.ProductId).ToArray();
+        if (groups.Length == 0) throw new InvalidOperationException("Informe pelo menos um item.");
         var ids = groups.Select(x => x.Key).ToArray();
         var products = await db.Products.Where(x => ids.Contains(x.Id)).ToDictionaryAsync(x => x.Id, ct);
         var balances = await db.StockMovements.Where(x => ids.Contains(x.ProductId)).GroupBy(x => x.ProductId)
             .Select(x => new { Id = x.Key, Quantity = x.Sum(m => m.Quantity) }).ToDictionaryAsync(x => x.Id, x => x.Quantity, ct);
+        var currentOrders = groups.SelectMany(group => group).Select(item => item.OrderId).Distinct().ToArray();
+        var reserved = await db.OrderItems
+            .Where(item => ids.Contains(item.ProductId) && !currentOrders.Contains(item.OrderId) && item.Order!.BilledAt != null &&
+                (item.Order.Status == OrderStatus.Confirmed ||
+                 (item.Order.Status == OrderStatus.Scheduled && db.DeliveryLoadOrders.Any(link =>
+                     link.OrderId == item.OrderId && link.DeliveryLoad!.Status == LoadStatus.Open))))
+            .GroupBy(item => item.ProductId)
+            .Select(group => new { Id = group.Key, Quantity = group.Sum(item => item.Quantity) })
+            .ToDictionaryAsync(item => item.Id, item => item.Quantity, ct);
         foreach (var group in groups)
         {
             var first = group.First();
             if (!products.TryGetValue(group.Key, out var product) || !product.IsActive || group.Any(x => x.Unit != product.Unit))
                 throw new InvalidOperationException($"Revise o produto {first.ProductCode}: ele está inativo ou a unidade do pedido difere do cadastro.");
             var needed = group.Sum(x => x.Quantity);
-            if (balances.GetValueOrDefault(group.Key) < needed)
-                throw new InvalidOperationException($"Estoque insuficiente para {first.ProductCode} — {first.ProductName}. Disponível: {balances.GetValueOrDefault(group.Key):0.###} {first.Unit}; carga: {needed:0.###}. Registre a entrada ou contagem em Estoque.");
+            var available = balances.GetValueOrDefault(group.Key) - reserved.GetValueOrDefault(group.Key);
+            if (available < needed)
+                throw new InvalidOperationException($"Estoque insuficiente para {first.ProductCode} — {first.ProductName}. Disponível após reservas: {Math.Max(0, available):0.###} {first.Unit}. Necessário: {needed:0.###}.");
         }
+    }
+
+    public async Task RecordDispatchAsync(DeliveryLoad load, string actor, CancellationToken ct)
+    {
+        var items = load.Orders.SelectMany(x => x.Order!.Items).ToArray();
+        await EnsureStockAsync(items, ct);
+        var groups = items.GroupBy(x => x.ProductId);
         foreach (var group in groups)
             db.StockMovements.Add(new StockMovement { ProductId = group.Key, Kind = StockMovementKind.Dispatch,
                 Quantity = -group.Sum(x => x.Quantity), Unit = group.First().Unit, Reason = $"Saída da carga {load.Number}",

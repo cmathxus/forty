@@ -42,6 +42,8 @@ public sealed class OrderService(AppDbContext dbContext)
         var order = new Order
         {
             Number = await NextNumberAsync(cancellationToken),
+            RequiresCommercialWorkflow = true,
+            Status = OrderStatus.Draft,
             CustomerId = customer.Id,
             SellerId = sellerId,
             IsFiscalInvoiceRequested = request.IsFiscalInvoiceRequested,
@@ -82,14 +84,16 @@ public sealed class OrderService(AppDbContext dbContext)
     public async Task<Order> UpdateAsync(Guid id, CreateOrderRequest request, CancellationToken cancellationToken)
     {
         ValidateItems(request);
+        await using var transaction = await new InventoryService(dbContext).BeginWriteAsync(cancellationToken);
         var order = await dbContext.Orders
             .Include(x => x.Items)
             .SingleOrDefaultAsync(x => x.Id == id, cancellationToken)
             ?? throw new InvalidOperationException("Pedido não encontrado.");
 
-        if (order.Status != OrderStatus.Confirmed ||
+        if (order.Status is not (OrderStatus.Draft or OrderStatus.Confirmed) || order.BilledAt is not null ||
+            await dbContext.ProductionPlans.AnyAsync(x => x.OrderId == id && x.Status != ProductionPlanStatus.Cancelled, cancellationToken) ||
             await dbContext.DeliveryLoadOrders.AnyAsync(x => x.OrderId == id, cancellationToken))
-            throw new InvalidOperationException("Somente pedidos confirmados e sem carga podem ser editados. Remova o pedido de uma carga aberta antes de editar.");
+            throw new InvalidOperationException("O pedido só pode ser editado antes do faturamento, da produção vinculada e da inclusão em carga.");
 
         if (await dbContext.AccountsReceivable.AnyAsync(x => x.OrderNumber == order.Number, cancellationToken))
             throw new InvalidOperationException("Este pedido possui lançamento financeiro. Revise o financeiro antes de editar.");
@@ -129,7 +133,10 @@ public sealed class OrderService(AppDbContext dbContext)
         order.DueDate = request.DueDate;
         order.PaymentCondition = request.PaymentCondition?.Trim();
         order.Notes = request.Notes?.Trim();
-        order.Status = OrderStatus.Confirmed;
+        order.Status = order.RequiresCommercialWorkflow ? OrderStatus.Draft : OrderStatus.Confirmed;
+        order.ApprovedAt = null;
+        order.ApprovedById = null;
+        order.ApprovedBy = null;
         order.UpdatedAt = DateTimeOffset.UtcNow;
 
         var newItems = new List<OrderItem>();
@@ -156,6 +163,7 @@ public sealed class OrderService(AppDbContext dbContext)
         dbContext.OrderItems.AddRange(newItems);
 
         await dbContext.SaveChangesAsync(cancellationToken);
+        if (transaction is not null) await transaction.CommitAsync(cancellationToken);
         return order;
     }
 

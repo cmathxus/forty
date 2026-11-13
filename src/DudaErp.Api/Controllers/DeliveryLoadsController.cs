@@ -9,17 +9,14 @@ using Microsoft.EntityFrameworkCore;
 namespace DudaErp.Api.Controllers;
 
 [ApiController]
-[Authorize(Policy = "loads.manage")]
 [Route("api/delivery-loads")]
 public sealed class DeliveryLoadsController(AppDbContext dbContext) : ControllerBase
 {
     [HttpPost]
+    [Authorize(Policy = "loads.create")]
     public async Task<ActionResult<DeliveryLoad>> Create(CreateDeliveryLoadRequest request, CancellationToken cancellationToken)
     {
-        await using var numberingTransaction = dbContext.Database.IsNpgsql() && dbContext.Database.CurrentTransaction is null
-            ? await dbContext.Database.BeginTransactionAsync(cancellationToken) : null;
-        if (dbContext.Database.IsNpgsql())
-            await dbContext.Database.ExecuteSqlRawAsync("SELECT pg_advisory_xact_lock(40670, 2)", cancellationToken);
+        await using var numberingTransaction = await new InventoryService(dbContext).BeginWriteAsync(cancellationToken);
         if (!await dbContext.Regions.AnyAsync(x => x.Id == request.RegionId && x.IsActive, cancellationToken))
             return BadRequest(new ValidationProblemDetails(new Dictionary<string, string[]> { ["regionId"] = ["Regiao invalida ou inativa."] }));
 
@@ -51,6 +48,7 @@ public sealed class DeliveryLoadsController(AppDbContext dbContext) : Controller
     }
 
     [HttpGet]
+    [Authorize(Policy = "loads.read")]
     public Task<List<DeliveryLoad>> GetAll(DateOnly? date, CancellationToken cancellationToken)
     {
         var query = dbContext.DeliveryLoads.AsNoTracking()
@@ -70,7 +68,64 @@ public sealed class DeliveryLoadsController(AppDbContext dbContext) : Controller
         return query.OrderByDescending(x => x.ScheduledDate).ThenByDescending(x => x.Number).ToListAsync(cancellationToken);
     }
 
+    [HttpGet("page")]
+    [Authorize(Policy = "loads.read")]
+    public async Task<IActionResult> GetPage([FromQuery] LoadPageQuery request, CancellationToken ct)
+    {
+        var query = dbContext.DeliveryLoads.AsNoTracking();
+        query = request.Stage switch {
+            0 => query.Where(x => x.Status == LoadStatus.Open),
+            1 => query.Where(x => x.Status == LoadStatus.Dispatched && x.ReturnedAt == null),
+            2 => query.Where(x => x.Status == LoadStatus.Dispatched && x.ReturnedAt != null),
+            3 => query.Where(x => x.Status == LoadStatus.Closed), _ => query
+        };
+        if (request.RegionId is { } region) query = query.Where(x => x.RegionId == region);
+        if (request.VehicleId is { } vehicle) query = query.Where(x => x.VehicleId == vehicle);
+        if (request.From is { } from) query = query.Where(x => x.ScheduledDate >= from);
+        if (request.To is { } to) query = query.Where(x => x.ScheduledDate <= to);
+        if (request.Shortages) query = query.Where(x => x.Orders.Any(o => o.ItemResults.Any(i => i.MissingQuantity > 0)));
+        if (!string.IsNullOrWhiteSpace(request.Driver))
+        {
+            var pattern = new PageQuery { Search = request.Driver }.Pattern;
+            query = query.Where(x => EF.Functions.ILike(x.DriverName ?? "", pattern, "\\"));
+        }
+        if (!string.IsNullOrWhiteSpace(request.Search))
+        {
+            var pattern = new PageQuery { Search = request.Search }.Pattern;
+            query = query.Where(x => EF.Functions.ILike(x.Number.ToString(), pattern, "\\") ||
+                EF.Functions.ILike(x.Region!.Name, pattern, "\\") || EF.Functions.ILike(x.DriverName ?? "", pattern, "\\") ||
+                EF.Functions.ILike(x.Vehicle!.Plate, pattern, "\\") || EF.Functions.ILike(x.Vehicle.Name, pattern, "\\") ||
+                x.Orders.Any(o => EF.Functions.ILike(o.Order!.Number.ToString(), pattern, "\\") ||
+                    EF.Functions.ILike(o.Order.Customer!.LegalName, pattern, "\\") || EF.Functions.ILike(o.Order.Customer.TradeName ?? "", pattern, "\\") ||
+                    EF.Functions.ILike(o.Order.Customer.City, pattern, "\\") || EF.Functions.ILike(o.Order.Customer.State, pattern, "\\") ||
+                    EF.Functions.ILike(o.Order.Customer.District, pattern, "\\") || EF.Functions.ILike(o.Order.Customer.Street, pattern, "\\")));
+        }
+        return Ok(await query.Include(x => x.Region).Include(x => x.Vehicle)
+            .Include(x => x.Orders).ThenInclude(x => x.Order).ThenInclude(x => x!.Customer)
+            .Include(x => x.Orders).ThenInclude(x => x.Order).ThenInclude(x => x!.Items)
+            .Include(x => x.Orders).ThenInclude(x => x.ItemResults).AsSplitQuery()
+            .OrderByDescending(x => x.ScheduledDate).ThenByDescending(x => x.Number).ThenBy(x => x.Id)
+            .ReadPageAsync(new() { Page = request.Page }, ct));
+    }
+
+    [HttpGet("filter-options")]
+    [Authorize(Policy = "loads.read")]
+    public async Task<IActionResult> FilterOptions(CancellationToken ct) => Ok(new {
+        regions = await dbContext.DeliveryLoads.Select(x => x.Region!).Distinct().OrderBy(x => x.Name).Select(x => new { x.Id, x.Name }).ToListAsync(ct),
+        vehicles = await dbContext.DeliveryLoads.Where(x => x.VehicleId != null).Select(x => x.Vehicle!).Distinct().OrderBy(x => x.Name).Select(x => new { x.Id, x.Name, x.Plate }).ToListAsync(ct)
+    });
+
+    [HttpGet("summary")]
+    [Authorize(Policy = "loads.read")]
+    public async Task<IActionResult> Summary(CancellationToken ct) => Ok(new {
+        preparing = await dbContext.DeliveryLoads.CountAsync(x => x.Status == LoadStatus.Open, ct),
+        onRoute = await dbContext.DeliveryLoads.CountAsync(x => x.Status == LoadStatus.Dispatched && x.ReturnedAt == null, ct),
+        recentOnRoute = await dbContext.DeliveryLoads.Where(x => x.Status == LoadStatus.Dispatched && x.ReturnedAt == null)
+            .OrderByDescending(x => x.Number).Take(3).Select(x => new { x.Number, region = new { x.Region!.Name }, orderCount = x.Orders.Count }).ToListAsync(ct)
+    });
+
     [HttpGet("{id:guid}")]
+    [Authorize(Policy = "loads.read")]
     public async Task<ActionResult<DeliveryLoad>> GetById(Guid id, CancellationToken cancellationToken)
     {
         var load = await LoadById(id, cancellationToken);
@@ -78,8 +133,10 @@ public sealed class DeliveryLoadsController(AppDbContext dbContext) : Controller
     }
 
     [HttpPost("{id:guid}/orders")]
+    [Authorize(Policy = "loads.edit")]
     public async Task<ActionResult<DeliveryLoad>> AddOrders(Guid id, AddOrdersToLoadRequest request, CancellationToken cancellationToken)
     {
+        await using var transaction = await new InventoryService(dbContext).BeginWriteAsync(cancellationToken);
         var load = await dbContext.DeliveryLoads.SingleOrDefaultAsync(x => x.Id == id, cancellationToken);
         if (load is null)
         {
@@ -98,12 +155,15 @@ public sealed class DeliveryLoadsController(AppDbContext dbContext) : Controller
             return BadRequest(new ValidationProblemDetails(new Dictionary<string, string[]> { ["orders"] = [exception.Message] }));
         }
 
+        if (transaction is not null) await transaction.CommitAsync(cancellationToken);
         return Ok(await LoadById(id, cancellationToken));
     }
 
     [HttpPut("{id:guid}")]
+    [Authorize(Policy = "loads.edit")]
     public async Task<ActionResult<DeliveryLoad>> Update(Guid id, UpdateDeliveryLoadRequest request, CancellationToken cancellationToken)
     {
+        await using var transaction = await new InventoryService(dbContext).BeginWriteAsync(cancellationToken);
         var load = await dbContext.DeliveryLoads
             .Include(x => x.Orders).ThenInclude(x => x.Order)
             .SingleOrDefaultAsync(x => x.Id == id, cancellationToken);
@@ -151,12 +211,15 @@ public sealed class DeliveryLoadsController(AppDbContext dbContext) : Controller
             return BadRequest(new { detail = "Os pedidos selecionados devem pertencer à região da carga." });
 
         await dbContext.SaveChangesAsync(cancellationToken);
+        if (transaction is not null) await transaction.CommitAsync(cancellationToken);
         return Ok(await LoadById(id, cancellationToken));
     }
 
     [HttpDelete("{id:guid}")]
+    [Authorize(Policy = "loads.delete")]
     public async Task<IActionResult> Delete(Guid id, CancellationToken cancellationToken)
     {
+        await using var transaction = await new InventoryService(dbContext).BeginWriteAsync(cancellationToken);
         var load = await dbContext.DeliveryLoads
             .Include(x => x.Orders).ThenInclude(x => x.Order)
             .SingleOrDefaultAsync(x => x.Id == id, cancellationToken);
@@ -176,10 +239,12 @@ public sealed class DeliveryLoadsController(AppDbContext dbContext) : Controller
 
         dbContext.DeliveryLoads.Remove(load);
         await dbContext.SaveChangesAsync(cancellationToken);
+        if (transaction is not null) await transaction.CommitAsync(cancellationToken);
         return NoContent();
     }
 
     [HttpPost("{loadId:guid}/orders/{orderId:guid}/close")]
+    [Authorize(Policy = "loads.reconcile")]
     public async Task<ActionResult<DeliveryLoad>> CloseOrder(Guid loadId, Guid orderId, CloseDeliveryRequest request, CancellationToken cancellationToken)
     {
         var inventory = new InventoryService(dbContext);
@@ -261,6 +326,7 @@ public sealed class DeliveryLoadsController(AppDbContext dbContext) : Controller
     }
 
     [HttpPost("{id:guid}/return")]
+    [Authorize(Policy = "loads.return")]
     public async Task<IActionResult> RecordReturn(Guid id, RecordLoadReturnRequest request, CancellationToken ct)
     {
         var inventory = new InventoryService(dbContext);
@@ -284,6 +350,7 @@ public sealed class DeliveryLoadsController(AppDbContext dbContext) : Controller
     }
 
     [HttpPost("{id:guid}/dispatch")]
+    [Authorize(Policy = "loads.dispatch")]
     public async Task<IActionResult> Dispatch(Guid id, CancellationToken cancellationToken)
     {
         var inventory = new InventoryService(dbContext);
@@ -315,6 +382,7 @@ public sealed class DeliveryLoadsController(AppDbContext dbContext) : Controller
     }
 
     [HttpGet("{id:guid}/summary")]
+    [Authorize(Policy = "loads.read")]
     public async Task<ActionResult<object>> Summary(Guid id, CancellationToken cancellationToken)
     {
         var load = await LoadById(id, cancellationToken);
@@ -363,8 +431,8 @@ public sealed class DeliveryLoadsController(AppDbContext dbContext) : Controller
 
         foreach (var order in orders)
         {
-            if (order.Status != OrderStatus.Confirmed)
-                throw new InvalidOperationException($"Pedido {order.Number} não está confirmado para inclusão em carga.");
+            if (!order.IsReadyForLoad)
+                throw new InvalidOperationException($"Pedido {order.Number} precisa estar faturado e disponível para inclusão em carga.");
             if (order.Customer!.RegionId != load.RegionId)
             {
                 throw new InvalidOperationException($"Pedido {order.Number} nao pertence a regiao da carga.");

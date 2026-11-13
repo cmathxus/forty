@@ -1,12 +1,14 @@
 const listPages = {};
 const pagedListDefinitions = {
-  customers: { label: 'Clientes', permission: 'customers.manage', render: () => renderCustomersList() },
-  products: { label: 'Produtos', permission: 'catalog.read', render: () => renderProductsList() },
-  sellers: { label: 'Vendedores', permission: 'catalog.manage', render: () => renderSellersList() },
-  regions: { label: 'Regiões', permission: 'catalog.manage', render: () => renderRegionsList() },
-  vehicles: { label: 'Veículos', permission: 'catalog.manage', render: () => renderVehiclesList() },
+  orders: { label: 'Pedidos', permission: 'orders.commercial', render: () => renderOrders() },
+  customers: { label: 'Clientes', permission: 'customers.read', render: () => renderCustomersList() },
+  products: { label: 'Produtos', permission: 'products.read', render: () => renderProductsList() },
+  sellers: { label: 'Vendedores', permission: 'sellers.read', render: () => renderSellersList() },
+  regions: { label: 'Regiões', permission: 'regions.read', render: () => renderRegionsList() },
+  vehicles: { label: 'Veículos', permission: 'vehicles.read', render: () => renderVehiclesList() },
   users: { label: 'Usuários', permission: 'users.manage', render: () => renderUsers() }
 };
+const orderListFilters = { status: '#orderStatusFilter', approved: '#orderApprovalFilter', delivered: '#orderDeliveryFilter' };
 
 function listPage(key) {
   return listPages[key] ??= { items: [], total: 0, page: 1, pageSize: 20, totalPages: 1, search: '', generation: 0, loading: false };
@@ -45,13 +47,21 @@ function renderPagination(key) {
 async function refreshList(key, requestedPage = listPage(key).page) {
   const definition = pagedListDefinitions[key];
   if (!definition || !hasPermission(definition.permission)) return;
-  const page = listPage(key), generation = ++page.generation, token = accessToken;
+  const page = listPage(key), generation = ++page.generation;
+  const session = typeof authGeneration === 'undefined' ? accessToken : authGeneration;
+  const sameSession = () => session === (typeof authGeneration === 'undefined' ? accessToken : authGeneration);
   page.page = requestedPage; page.loading = true; page.error = false;
   renderPagination(key);
   const query = new URLSearchParams({ page: String(requestedPage), pageSize: '20', search: page.search });
+  if (key === 'orders') {
+    for (const [name, selector] of Object.entries(orderListFilters)) {
+      const value = $(selector)?.value;
+      if (value) query.set(name, value);
+    }
+  }
   try {
     const result = await api(`/api/lists/${key}?${query}`);
-    if (generation !== page.generation || token !== accessToken) return;
+    if (generation !== page.generation || !sameSession()) return;
     Object.assign(page, { items: result.items, total: result.total, page: result.page, totalPages: result.totalPages });
     // Cache separado da página: editar uma linha continua encontrando o registro.
     if (key === 'users') state.users = result.items;
@@ -60,11 +70,11 @@ async function refreshList(key, requestedPage = listPage(key).page) {
       result.items.forEach(item => cache.set(item.id, item)); state[key] = [...cache.values()];
     }
   } catch (error) {
-    if (generation !== page.generation || token !== accessToken) return;
+    if (generation !== page.generation || !sameSession()) return;
     page.items = []; page.error = true;
     throw error;
   } finally {
-    if (generation === page.generation && token === accessToken) {
+    if (generation === page.generation && sameSession()) {
       page.loading = false; definition.render(); renderPagination(key);
     }
   }
@@ -77,7 +87,7 @@ function refreshVisibleList() {
 
 function wireListPagination() {
   for (const key of Object.keys(pagedListDefinitions)) {
-    const input = key === 'users' ? $('#userSearch') : $(`[data-filter='${key}']`);
+    const input = key === 'orders' ? $('#orderSearch') : key === 'users' ? $('#userSearch') : $(`[data-filter='${key}']`);
     input.type = 'search'; input.maxLength = 200;
     input.setAttribute('aria-label', `Buscar: ${pagedListDefinitions[key].label}`);
     input.addEventListener('input', () => {
@@ -93,8 +103,13 @@ function clearListPagination() {
   for (const [key, page] of Object.entries(listPages)) {
     clearTimeout(page.timer); page.generation++; page.items = []; page.total = 0; page.page = 1;
     page.totalPages = 1; page.search = ''; page.error = false; page.loading = false;
-    const input = key === 'users' ? $('#userSearch') : $(`[data-filter='${key}']`);
+    const input = key === 'orders' ? $('#orderSearch') : key === 'users' ? $('#userSearch') : $(`[data-filter='${key}']`);
     if (input) input.value = '';
+    if (key === 'orders') for (const selector of Object.values(orderListFilters)) {
+      const field = $(selector);
+      field.value = '';
+      window.FortyControls?.syncSelect(field);
+    }
     $(`#${key}Pagination`)?.remove();
   }
 }

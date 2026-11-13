@@ -44,11 +44,11 @@ function openLoadQrTarget() {
   }
   if (!accessToken || !state.currentUser) return; // Mantém o destino durante o login.
   const id = hash.slice('#conferencia='.length).toLowerCase();
-  if (!loadQrIdPattern.test(id) || !hasPermission('loads.manage')) {
+  if (!loadQrIdPattern.test(id) || !hasPermission('loads.read')) {
     qrSelectedLoadId = null;
     presentLoadQrTarget();
     window.history.replaceState(null, '', window.location.pathname + window.location.search);
-    toast(!hasPermission('loads.manage') ? 'Seu perfil não tem acesso à conferência de cargas.' : 'O link de conferência é inválido.');
+    toast(!hasPermission('loads.read') ? 'Seu perfil não tem acesso à conferência de cargas.' : 'O link de conferência é inválido.');
     return;
   }
   const load = state.loads.find(load => load.id === id);
@@ -62,7 +62,6 @@ function openLoadQrTarget() {
   presentLoadQrTarget(load);
   if (qrSelectedLoadId === id) return;
   qrSelectedLoadId = id;
-  $('#loadMissingOnly').checked = false;
   renderLoads();
   showView('loads');
   const list = $('#loadsList');

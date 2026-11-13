@@ -89,7 +89,9 @@ async function apiRequest(path, options = {}) {
     if (response.status === 429) throw new Error("Muitas tentativas de acesso. Aguarde um minuto e tente novamente.");
     if (response.status === 403) throw new Error("Seu perfil não tem permissão para esta operação.");
     const text = await response.text();
-    throw new Error(errorMessage(text) || `Erro ${response.status}`);
+    const error = new Error(errorMessage(text) || `Erro ${response.status}`);
+    error.status = response.status;
+    throw error;
   }
 
   if (response.status === 204) return null;
@@ -175,11 +177,11 @@ function updateOrderCustomerHint() {
 
 async function refreshCatalog() {
   const [regions, sellers, vehicles, products, customers] = await Promise.all([
-    hasPermission("catalog.references") ? api("/api/catalog/regions") : [],
-    hasPermission("catalog.references") ? api("/api/catalog/sellers") : [],
-    hasPermission("catalog.references") ? api("/api/catalog/vehicles") : [],
-    api("/api/catalog/products"),
-    hasPermission("customers.manage") ? api("/api/customers") : []
+    hasPermission("regions.read") ? api("/api/catalog/regions") : [],
+    hasPermission("sellers.read") ? api("/api/catalog/sellers") : [],
+    hasPermission("vehicles.read") ? api("/api/catalog/vehicles") : [],
+    hasPermission("products.read") ? api("/api/catalog/products") : [],
+    hasPermission("customers.read") ? api("/api/customers") : []
   ]);
 
   state.regions = regions;
@@ -223,15 +225,28 @@ async function refreshOrders() {
 }
 
 async function refreshLoads() {
-  state.loads = await api("/api/delivery-loads");
+  const summaryTask = api('/api/delivery-loads/summary').then(summary => state.loadSummary = summary);
+  await Promise.all([summaryTask, refreshLoadFilterOptions(), refreshLoadPage()]);
+  const qrId = window.location.hash.startsWith('#conferencia=') ? window.location.hash.slice('#conferencia='.length).toLowerCase() : null;
+  const detailId = qrId || selectedLoadId;
+  if (detailId && loadQrIdPattern.test(detailId)) {
+    try {
+      const detail = await api(`/api/delivery-loads/${detailId}`);
+      state.loads = [...state.loads.filter(load => load.id !== detailId), detail];
+    } catch (error) {
+      if (error.status !== 404) throw error;
+      state.loads = state.loads.filter(load => load.id !== detailId);
+      if (!qrId) { selectedLoadId = null; toast(error.message); }
+    }
+  }
   renderLoads();
   renderMetrics();
 }
 
 async function refreshFinancial() {
   const [payables, receivables] = await Promise.all([
-    api("/api/financial/payables"),
-    api("/api/financial/receivables")
+    hasPermission("payables.read") ? api("/api/financial/payables") : [],
+    hasPermission("receivables.read") ? api("/api/financial/receivables") : []
   ]);
   state.payables = payables;
   state.receivables = receivables;
@@ -259,6 +274,7 @@ function renderCustomersList() {
       <div class="card-actions">
         <button type="button" data-edit-customer="${customer.id}">Editar</button>
         <button type="button" data-delete-customer="${customer.id}">Excluir</button>
+        ${hasPermission('finance.customer') ? `<button type="button" data-customer-finance="${customer.id}">Resumo financeiro</button>` : ''}
       </div>
     </div>
   `).join("") || emptyList("Nenhum cliente encontrado.");
@@ -333,6 +349,7 @@ function emptyList(message) {
 function statusBadge(status) {
   const map = {
     Pending: ["Pendente", "amber"],
+    Draft: ["Pendente", "amber"],
     Confirmed: ["Confirmado", "blue"],
     Scheduled: ["Na carga", "amber"],
     Delivered: ["Entregue", "green"],
@@ -348,7 +365,7 @@ function statusBadge(status) {
 }
 
 function renderMetrics() {
-  const pendingOrders = state.orders.filter(order => order.status === "Confirmed");
+  const pendingOrders = state.orders.filter(order => order.isReadyForLoad ?? order.status === "Confirmed");
   const openLoads = state.loads.filter(load => load.status === "Open");
   const streetLoads = state.loads.filter(load => load.status === "Dispatched" && !load.returnedAt);
   const receivableTotal = state.receivables.filter(item => item.status === "Open").reduce((sum, item) => sum + Number(item.amount || 0), 0);
@@ -356,17 +373,20 @@ function renderMetrics() {
   $("#waitingOrderValue").textContent = money(pendingOrders.reduce((sum, order) => sum + Number(order.totalAmount || 0), 0));
   $("#waitingOrderCount").textContent = pendingOrders.length === 1 ? "1 pedido confirmado" : `${pendingOrders.length} pedidos confirmados`;
   $("#flowWaiting").textContent = pendingOrders.length;
-  $("#flowPreparing").textContent = openLoads.length;
-  $("#flowOnRoute").textContent = streetLoads.length;
-  $("#flowSummary").textContent = streetLoads.length ? `${streetLoads.length} ${streetLoads.length === 1 ? "carga" : "cargas"} em rota.` : "Nenhuma carga em rota.";
+  const preparingCount = state.loadSummary?.preparing ?? openLoads.length;
+  const routeCount = state.loadSummary?.onRoute ?? streetLoads.length;
+  $("#flowPreparing").textContent = preparingCount;
+  $("#flowOnRoute").textContent = routeCount;
+  $("#flowSummary").textContent = routeCount ? `${routeCount} ${routeCount === 1 ? "carga" : "cargas"} em rota.` : "Nenhuma carga em rota.";
   const summaries = [
     ["Clientes ativos", state.customers.filter(x => x.isActive).length, '<circle cx="12" cy="8" r="3.5"></circle><path d="M5 21v-2a7 7 0 0 1 14 0v2"></path>'],
     ["Produtos no catálogo", state.products.filter(x => x.isActive).length, '<path d="m12 3 9 5v9l-9 5-9-5V8zM3 8l9 5 9-5M12 13v9"></path>'],
     ["Contas a receber abertas", money(receivableTotal), '<path d="M12 3v18M17 7H9a3 3 0 0 0 0 6h6a3 3 0 0 1 0 6H6"></path>'],
     ["Contas a pagar vencidas", overdue, '<circle cx="12" cy="12" r="9"></circle><path d="M12 7v6l4 2"></path>']
   ];
-  $("#metrics").innerHTML = summaries.map(([label, value, icon]) => `<div class="metric"><span class="metric-icon"><svg viewBox="0 0 24 24" aria-hidden="true">${icon}</svg></span><span class="metric-label">${label}</span><strong>${value}</strong></div>`).join("");
-  document.title = streetLoads.length ? `FORTY · ${streetLoads.length} carga(s) em rota` : "FORTY · Operação";
+  const visibleSummaries = summaries.filter((_, index) => !state.currentUser || index < 2 || hasPermission(index === 2 ? "receivables.read" : "payables.read"));
+  $("#metrics").innerHTML = visibleSummaries.map(([label, value, icon]) => `<div class="metric"><span class="metric-icon"><svg viewBox="0 0 24 24" aria-hidden="true">${icon}</svg></span><span class="metric-label">${label}</span><strong>${value}</strong></div>`).join("");
+  document.title = routeCount ? `FORTY · ${routeCount} carga(s) em rota` : "FORTY · Operação";
   renderDashboard();
 }
 
@@ -375,8 +395,8 @@ function renderDashboard() {
   const recent = $("#dashboardRecentOrders");
   if (!actions || !recent) return;
 
-  const pendingOrders = state.orders.filter(order => order.status === "Confirmed");
-  const loadsOnStreet = state.loads.filter(load => load.status === "Dispatched" && !load.returnedAt);
+  const pendingOrders = state.orders.filter(order => order.isReadyForLoad ?? order.status === "Confirmed");
+  const loadsOnStreet = state.loadSummary?.recentOnRoute ?? state.loads.filter(load => load.status === "Dispatched" && !load.returnedAt);
   const duePayables = state.payables
     .filter(item => item.status === "Open")
     .map(item => ({ ...item, days: daysUntil(item.dueDate) }))
@@ -397,7 +417,7 @@ function renderDashboard() {
     })),
     ...loadsOnStreet.slice(0, 3).map(load => ({
       title: `Carga ${load.number} está na rua`,
-      meta: `${load.region?.name ?? "Região"} · ${load.orders.length} pedido(s)`,
+      meta: `${load.region?.name ?? "Região"} · ${load.orderCount ?? load.orders.length} pedido(s)`,
       view: "loads"
     })),
     ...duePayables.slice(0, 3).map(item => ({
@@ -442,18 +462,17 @@ function renderOrders() {
   const list = $("#ordersList");
   list.innerHTML = "";
 
-  const term = normalize($("#orderSearch")?.value).trim();
-  const status = $("#orderStatusFilter")?.value;
-  const filtered = state.orders.filter(order => (!status || order.status === status) &&
-    matches(order, term, [x => x.number, x => x.customer?.legalName, x => x.seller?.name]));
-  $("#orderCount").textContent = `${filtered.length} pedido(s)`;
-  $("#moreOrders").hidden = filtered.length <= visibleOrders;
+  const filtered = listRows('orders');
+  $("#orderCount").textContent = listCount('orders');
+  $("#moreOrders").hidden = true;
   if (filtered.length === 0) {
     list.innerHTML = `<div class="card"><strong>Nenhum pedido encontrado</strong><div class="meta">Revise os filtros ou lance um novo pedido.</div></div>`;
     return;
   }
 
-  for (const order of filtered.slice(0, visibleOrders)) {
+  for (const order of filtered) {
+    const available = ["Draft", "Confirmed"].includes(order.status);
+    const editable = available && !order.billedAt;
     const card = document.createElement("div");
     card.className = "card";
     card.innerHTML = `
@@ -462,13 +481,17 @@ function renderOrders() {
           <strong>Pedido ${order.number} - ${money(order.totalAmount)}</strong>
           <div class="meta">${escapeHtml(order.customer?.legalName ?? "Cliente")} | ${escapeHtml(order.seller?.name ?? "Vendedor")}</div>
           <div class="meta">${order.isFiscalInvoiceRequested ? "Pedido para NF-e" : "Executado"} | ${escapeHtml(order.paymentCondition || "sem condição")} | Peso ${Number(order.totalWeightInKg || 0).toFixed(3)} kg</div>
+          ${order.approvedAt ? `<div class="meta">Aprovado por ${escapeHtml(order.approvedBy || "Financeiro")} em ${new Date(order.approvedAt).toLocaleString("pt-BR")}</div>` : order.requiresCommercialWorkflow ? `<div class="meta">${order.billedAt ? 'Faturado sem aprovação prévia' : 'Aprovação para produção pendente'}</div>` : ''}
+          ${order.billedAt ? `<div class="meta">Faturado em ${new Date(order.billedAt).toLocaleString("pt-BR")}</div>` : ''}
         </div>
         ${statusBadge(order.status)}
       </div>
       <div class="card-actions">
         <button type="button" data-vale="${order.id}">Ver executado</button>
-        <button type="button" data-edit-order="${order.id}" ${order.status !== "Confirmed" ? 'disabled title="Pedido vinculado à operação de entrega"' : ""}>Editar</button>
-        <button type="button" data-delete-order="${order.id}" ${order.status !== "Confirmed" ? "disabled" : ""}>Excluir</button>
+        ${order.status === 'Draft' && order.requiresCommercialWorkflow && hasPermission('orders.approve') ? `<button type="button" data-approve-order="${order.id}">Aprovar para produção</button>` : ''}
+        ${editable && hasPermission('orders.bill') ? `<button type="button" class="primary" data-bill-order="${order.id}">Faturar pedido</button>` : ''}
+        <button type="button" data-edit-order="${order.id}" ${editable ? "" : "disabled"}>Editar</button>
+        <button type="button" data-delete-order="${order.id}" ${editable ? "" : "disabled"}>Excluir</button>
       </div>
     `;
     list.append(card);
@@ -509,7 +532,7 @@ function renderLoadOrderChoices() {
   const linkedOrderIds = new Set(editingLoad?.orders.map(x => x.orderId) ?? []);
   const available = state.orders.filter(order => {
     const sameRegion = !selectedRegionId || order.customer?.regionId === selectedRegionId;
-    const canUse = order.status === "Confirmed" || linkedOrderIds.has(order.id);
+    const canUse = (order.isReadyForLoad ?? order.status === "Confirmed") || linkedOrderIds.has(order.id);
     return sameRegion && canUse;
   });
   container.innerHTML = "";
@@ -540,6 +563,13 @@ function financialStatusBadge(status) {
   return `<span class="badge ${color}">${label}</span>`;
 }
 
+function payableActions(item) {
+  if (item.createdById === state.currentUser?.id) return '';
+  if (item.status === 'Open' && hasPermission('payables.pay')) return `<button type="button" class="primary" data-pay-payable="${item.id}">Registrar pagamento</button>`;
+  if (item.status === 'Paid' && !item.checkedAt && hasPermission('payables.check')) return `<button type="button" data-check-payable="${item.id}">Conferir pagamento</button>`;
+  return '';
+}
+
 function renderFinancial() {
   $("#payablesCount").textContent = `${state.payables.length} conta(s)`;
   $("#payablesList").innerHTML = state.payables.map(item => `
@@ -548,12 +578,15 @@ function renderFinancial() {
         <div>
           <strong>${escapeHtml(item.description)} - ${money(item.amount)}</strong>
           <div class="meta">${escapeHtml(item.supplierName || "Fornecedor não informado")} | vence ${dateBR(item.dueDate)}</div>
+          ${item.createdBy ? `<div class="meta">Lançado por ${escapeHtml(item.createdBy)}</div>` : ''}
+          ${item.paidDate ? `<div class="meta">Pago em ${dateBR(item.paidDate)}${item.paidBy ? ` por ${escapeHtml(item.paidBy)}` : ''}</div>` : ''}
+          ${item.checkedAt ? `<div class="meta">Conferido por ${escapeHtml(item.checkedBy || 'Financeiro')} em ${new Date(item.checkedAt).toLocaleString('pt-BR')}</div>` : ''}
           ${item.notes ? `<div class="meta">${escapeHtml(item.notes)}</div>` : ""}
         </div>
         ${financialStatusBadge(item.status)}
       </div>
       <div class="card-actions">
-        ${item.status === "Open" ? `<button type="button" class="primary" data-pay-payable="${item.id}">Marcar pago</button>` : ""}
+        ${payableActions(item)}
         <button type="button" data-edit-payable="${item.id}" ${item.status !== "Open" ? "disabled" : ""}>Editar</button>
         <button type="button" data-delete-payable="${item.id}" ${item.status !== "Open" ? "disabled" : ""}>Excluir</button>
       </div>
@@ -567,14 +600,15 @@ function renderFinancial() {
         <div>
           <strong>${escapeHtml(item.description)} - ${money(item.amount)}</strong>
           <div class="meta">${escapeHtml(item.customer?.legalName || "Cliente não informado")} ${item.orderNumber != null ? `| Pedido ${item.orderNumber}` : ""} | vence ${dateBR(item.dueDate)}</div>
+          ${item.receivedDate ? `<div class="meta">Recebido em ${dateBR(item.receivedDate)} · ${item.receivedDate <= item.dueDate ? 'No prazo' : 'Em atraso'}</div>` : ''}
           ${item.notes ? `<div class="meta">${escapeHtml(item.notes)}</div>` : ""}
         </div>
         ${financialStatusBadge(item.status)}
       </div>
       <div class="card-actions">
         ${item.status === "Open" ? `<button type="button" class="primary" data-receive-receivable="${item.id}">Marcar recebido</button>` : ""}
-        <button type="button" data-edit-receivable="${item.id}" ${item.status !== "Open" ? "disabled" : ""}>Editar</button>
-        <button type="button" data-delete-receivable="${item.id}" ${item.status !== "Open" ? "disabled" : ""}>Excluir</button>
+        <button type="button" data-edit-receivable="${item.id}" ${item.status !== "Open" || item.billedOrderId ? "disabled" : ""}>Editar</button>
+        <button type="button" data-delete-receivable="${item.id}" ${item.status !== "Open" || item.billedOrderId ? "disabled" : ""}>Excluir</button>
       </div>
     </div>
   `).join("") || `<div class="card"><strong>Nenhuma conta a receber.</strong></div>`;
@@ -631,7 +665,7 @@ function renderNotifications() {
         <div class="meta">${status} - ${dateBR(item.dueDate)}</div>
         <div class="card-actions">
           <button type="button" data-view-shortcut="payables">Abrir contas</button>
-          <button type="button" class="primary" data-pay-payable="${item.id}">Marcar pago</button>
+          ${payableActions(item)}
         </div>
       </div>
     `;
@@ -773,6 +807,8 @@ async function openCreateForm(key) {
   const form = $(`[data-edit-key='${key}']`);
   if (!form || !names[key]) return;
   const resumeDraft = form.dataset.dirty === "true" && !state.editing[key];
+  const permissionCatalog = key === "user" ? await loadPermissionCatalog() : null;
+  if (!window.FortyAccess?.canCreate(key)) return;
   if (!resumeDraft) {
     if (form.dataset.dirty === "true" && !(await askConfirmation("Descartar as alterações deste formulário?", { title: 'Descartar alterações?', accept: 'Descartar', cancel: 'Continuar editando', destructive: true }))) return;
     form.reset();
@@ -785,7 +821,7 @@ async function openCreateForm(key) {
     }
   }
   state.editing[key] = null;
-  if (key === "user") prepareUserForm();
+  if (key === "user" && !resumeDraft) prepareUserForm(permissionCatalog);
   if (key === "productionPlan" && !resumeDraft) prepareProductionPlan();
   if (key === "load") renderLoadOrderChoices();
   window.FortyControls?.sync(form);
@@ -794,7 +830,7 @@ async function openCreateForm(key) {
 }
 
 function openEditModal(form, title) {
-  if (form.id === 'loadForm') form.hidden = false;
+  if (['loadForm', 'orderForm'].includes(form.id)) form.hidden = false;
   window.FortyControls?.closeAll();
   editModal.returnFocus = document.activeElement;
   if (editModal.form && editModal.form !== form) {
@@ -810,7 +846,7 @@ function openEditModal(form, title) {
   $("#editModalTitle").textContent = title;
   $("#editModalBody").append(form);
   $("#editModal").classList.toggle("compact-modal", form.id === "regionForm");
-  $("#editModal").classList.toggle("medium-modal", ["sellerForm", "vehicleForm", "stockForm", "userForm", "userPasswordForm", "loadReturnForm"].includes(form.id));
+  $("#editModal").classList.toggle("medium-modal", ["sellerForm", "vehicleForm", "stockForm", "userPasswordForm", "loadReturnForm"].includes(form.id));
   $("#editModal").classList.add("open");
   $("#editModal").setAttribute("aria-hidden", "false");
   updateFormMode(form);
@@ -822,7 +858,7 @@ function openEditModal(form, title) {
 
 function closeEditModal() {
   if (!editModal.form) return;
-  if (editModal.form.id === 'loadForm') editModal.form.hidden = true;
+  if (['loadForm', 'orderForm'].includes(editModal.form.id)) editModal.form.hidden = true;
   window.FortyControls?.closeAll();
 
   if (editModal.placeholder?.parentNode) {
@@ -985,12 +1021,19 @@ function wireNav() {
       button.setAttribute("aria-expanded", String(open));
     });
   });
-  document.addEventListener("click", event => { if (!event.target.closest("#sidebar")) closeNavGroups(); });
+  document.addEventListener("click", event => {
+    if (!event.target.closest("#sidebar")) {
+      closeNavGroups();
+      if (mobile.matches) setMobileNavigation(true);
+    }
+  });
   document.addEventListener("keydown", event => {
     if (event.key !== "Escape") return;
     const current = $(".nav-group.open [data-menu-toggle]");
     closeNavGroups();
-    current?.focus();
+    if (mobile.matches) setMobileNavigation(true);
+    if (mobile.matches) toggle.focus();
+    else current?.focus();
   });
 }
 
@@ -1190,6 +1233,33 @@ async function settle(url, message) {
   }
 }
 
+async function confirmOperation(url, title, message, success, button, body) {
+  if (!(await askConfirmation(message, { title, accept: title }))) return;
+  button.disabled = true;
+  try {
+    await api(url, { method: 'POST', body: body === undefined ? undefined : JSON.stringify(body) });
+    toast(success);
+    await refreshAll();
+  } catch (error) {
+    toast(error.message);
+  } finally {
+    button.disabled = false;
+  }
+}
+
+async function openCustomerFinance(id) {
+  try {
+    const summary = await api(`/api/financial/customers/${id}/summary`);
+    const dialog = $('#customerFinanceDialog');
+    $('#customerFinanceTitle').textContent = summary.customer;
+    $('#customerFinanceSummary').textContent =
+      `${summary.orders} pedido(s) · ${summary.open} conta(s) em aberto\n${summary.onTime} recebimento(s) no prazo · ${summary.late} em atraso`;
+    if (!dialog.open) dialog.showModal();
+  } catch (error) {
+    toast(error.message);
+  }
+}
+
 async function deleteResource(label, url) {
   if (!(await askConfirmation(`Tem certeza que deseja excluir ${label}?`, { title: 'Excluir registro', accept: 'Excluir', destructive: true }))) return;
   try {
@@ -1206,17 +1276,17 @@ function showView(view) {
   if (!window.FortyAccess?.canView(view)) return toast("Seu perfil não tem acesso a esta área.");
   window.FortyControls?.closeAll();
   const button = $(`aside [data-view='${view}']`);
-  if (!button) return;
+  if (!button && view !== "noAccess") return;
   $$("aside [data-view]").forEach(x => {
     x.classList.toggle("active", x === button);
     x.setAttribute("aria-current", x === button ? "page" : "false");
   });
   $$(".view").forEach(x => x.classList.toggle("active", x.id === view));
-  const currentGroup = button.closest(".nav-group");
+  const currentGroup = button?.closest(".nav-group");
   $$(".nav-group").forEach(group => group.classList.toggle("current", group === currentGroup));
   closeNavGroups();
   const category = currentGroup ? $("[data-menu-toggle] .nav-text", currentGroup).textContent : "Área de trabalho";
-  $("#workspaceLocation").textContent = `${category} / ${$(".nav-text", button).textContent}`;
+  $("#workspaceLocation").textContent = `${category} / ${button ? $(".nav-text", button).textContent : "Acesso"}`;
   window.scrollTo({ top: 0, behavior: "instant" });
   if (matchMedia("(max-width: 980px)").matches && !document.body.classList.contains("sidebar-collapsed")) $("#sidebarToggle").click();
   const heading = $(`#${view} > header h2`);
@@ -1233,11 +1303,7 @@ function wireActions() {
     }
     refreshAll().catch(error => toast(error.message));
   });
-  ["#orderSearch", "#orderStatusFilter"].forEach(selector => $(selector).addEventListener(selector === "#orderStatusFilter" ? "change" : "input", () => {
-    visibleOrders = 40;
-    renderOrders();
-  }));
-  $("#moreOrders").addEventListener("click", () => { visibleOrders += 40; renderOrders(); });
+  Object.values(orderListFilters).forEach(selector => $(selector).addEventListener('change', () => refreshList('orders', 1).catch(error => toast(error.message))));
   window.addEventListener("unhandledrejection", event => {
     toast(event.reason?.message || "Não foi possível concluir a operação.");
     event.preventDefault();
@@ -1323,7 +1389,11 @@ function wireActions() {
     if (target.dataset?.deleteLoad) return deleteResource("esta carga", `/api/delivery-loads/${target.dataset.deleteLoad}`);
     if (target.dataset?.deletePayable) return deleteResource("esta conta a pagar", `/api/financial/payables/${target.dataset.deletePayable}`);
     if (target.dataset?.deleteReceivable) return deleteResource("esta conta a receber", `/api/financial/receivables/${target.dataset.deleteReceivable}`);
-    if (target.dataset?.payPayable) return settle(`/api/financial/payables/${target.dataset.payPayable}/pay`, "Conta marcada como paga.");
+    if (target.dataset?.approveOrder) return confirmOperation(`/api/orders/${target.dataset.approveOrder}/approve`, 'Aprovar pedido', 'Liberar este pedido para produção?', 'Pedido aprovado.', target);
+    if (target.dataset?.customerFinance) return openCustomerFinance(target.dataset.customerFinance);
+    if (target.dataset?.billOrder) return confirmOperation(`/api/orders/${target.dataset.billOrder}/bill`, 'Faturar pedido', 'Registrar a venda e gerar a conta a receber?', 'Pedido faturado e conta a receber lançada.', target);
+    if (target.dataset?.checkPayable) return confirmOperation(`/api/financial/payables/${target.dataset.checkPayable}/check`, 'Conferir pagamento', 'Confirmar que você conferiu o pagamento desta despesa?', 'Pagamento conferido.', target);
+    if (target.dataset?.payPayable) return confirmOperation(`/api/financial/payables/${target.dataset.payPayable}/pay`, 'Registrar pagamento', 'Confirmar que esta despesa foi paga hoje?', 'Pagamento registrado.', target, { date: localDateOnly(new Date()) });
     if (target.dataset?.receiveReceivable) return settle(`/api/financial/receivables/${target.dataset.receiveReceivable}/receive`, "Conta marcada como recebida.");
 
     const valeId = event.target.dataset?.vale;
@@ -1510,7 +1580,7 @@ async function refreshReportData(type) {
   }
 
   if (["loads", "load", "loading", "loadingLoad", "reconciliation"].includes(type)) {
-    await refreshLoads();
+    state.loads = await api('/api/delivery-loads');
     return;
   }
 }
@@ -1941,11 +2011,12 @@ async function refreshAll() {
   $("#syncStatus").textContent = "Atualizando dados…";
   refreshPromise = (async () => {
     try {
-      const tasks = [refreshCatalog(), refreshInventory()];
-      if (hasPermission("orders.read")) tasks.push(refreshOrders());
-      if (hasPermission("loads.manage")) tasks.push(refreshLoads());
-      if (hasPermission("finance.manage")) tasks.push(refreshFinancial());
-      if (hasPermission("production.manage")) tasks.push(refreshProduction());
+      const tasks = [refreshCatalog()];
+      if (hasPermission("stock.read")) tasks.push(refreshInventory());
+      if (hasPermission("orders.lookup")) tasks.push(refreshOrders());
+      if (hasPermission("loads.read")) tasks.push(refreshLoads());
+      if (hasPermission("payables.read") || hasPermission("receivables.read")) tasks.push(refreshFinancial());
+      if (hasPermission("production.read")) tasks.push(refreshProduction());
       const results = await Promise.allSettled(tasks);
       const failure = results.find(result => result.status === "rejected");
       if (failure) throw failure.reason;
@@ -1966,6 +2037,7 @@ async function refreshAll() {
 }
 
 async function init() {
+  wireLoadFilters();
   watchAuthSession();
   wireListPagination();
   window.addEventListener('hashchange', () => {
@@ -1999,6 +2071,7 @@ async function init() {
 }
 
 function showLogin(message = "") {
+  if ($('#customerFinanceDialog')?.open) $('#customerFinanceDialog').close();
   window.FortyDialogs?.cancel();
   if (editModal.form) closeEditModal();
   if ($("#passwordDialog").open) $("#passwordDialog").close();
@@ -2023,7 +2096,7 @@ function updateProfile(user) {
   $("#profileAvatar").textContent = initials;
   window.FortyAccess?.apply();
   const currentView = $(".view.active")?.id;
-  if (!window.FortyAccess?.canView(currentView)) showView(window.FortyAccess.home());
+  if (currentView === 'noAccess' || !window.FortyAccess?.canView(currentView)) showView(window.FortyAccess.home());
 }
 
 async function logout() {
@@ -2050,6 +2123,11 @@ function wireAuthentication() {
     $("#profileButton").setAttribute("aria-expanded", "true");
   });
   $("#closeProfile").addEventListener("click", () => profileDialog.close());
+  $("#profileCreateReceivable").addEventListener("click", () => {
+    if (!window.FortyAccess?.canCreate('receivable')) return;
+    profileDialog.close();
+    return openCreateForm('receivable');
+  });
   profileDialog.addEventListener("click", event => {
     const rect = profileDialog.getBoundingClientRect();
     if (event.target === profileDialog && (event.clientX < rect.left || event.clientX > rect.right ||

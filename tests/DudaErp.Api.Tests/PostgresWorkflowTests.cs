@@ -35,7 +35,7 @@ public sealed class PostgresWorkflowTests
         db.AddRange(region, seller, customer, product);
         await db.SaveChangesAsync();
         var service = new OrderService(db);
-        var request = new CreateOrderRequest(customer.Id, seller.Id, false, null, null,
+        var request = new CreateOrderRequest(customer.Id, seller.Id, false, DateOnly.FromDateTime(DateTime.Today), null,
             [new CreateOrderItemRequest(product.Code, 2)]);
         var order = await service.CreateAsync(request, default);
         await service.UpdateAsync(order.Id, request with { Items = [new CreateOrderItemRequest(product.Code, 3)] }, default);
@@ -49,6 +49,36 @@ public sealed class PostgresWorkflowTests
         Assert.Equal(originalItemId, await db.OrderItems.Where(x => x.OrderId == order.Id).Select(x => x.Id).SingleAsync());
         Assert.Equal(30m, (await db.Orders.SingleAsync(x => x.Id == order.Id)).TotalAmount);
 
+        var orders = new OrdersController(db, service);
+        var production = new ProductionController(db);
+        var plan = new CreateProductionPlanRequest(Guid.NewGuid(), DateOnly.FromDateTime(DateTime.Today), null,
+            [new(product.Id, 3)], order.Number);
+        Assert.IsType<ConflictObjectResult>(await production.Create(plan, default));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => orders.Bill(order.Id, default));
+        db.StockMovements.Add(new StockMovement { ProductId = product.Id, Kind = StockMovementKind.Count, Quantity = 10,
+            Unit = "FD", SourceKey = "qa-initial", RecordedBy = "QA", Reason = "Contagem inicial" });
+        await db.SaveChangesAsync();
+        Assert.IsType<NoContentResult>(await orders.Bill(order.Id, default));
+        Assert.IsType<NoContentResult>(await orders.Bill(order.Id, default));
+        var receivable = await db.AccountsReceivable.SingleAsync(x => x.BilledOrderId == order.Id);
+        Assert.Equal(30m, receivable.Amount);
+        Assert.Equal(10m, await new InventoryService(db).BalanceAsync(product.Id, default));
+        Assert.Null((await db.Orders.SingleAsync(x => x.Id == order.Id)).ApprovedAt);
+        var excess = await service.CreateAsync(request with { Items = [new CreateOrderItemRequest(product.Code, 8)] }, default);
+        await Assert.ThrowsAsync<InvalidOperationException>(() => orders.Bill(excess.Id, default));
+
+        var second = await service.CreateAsync(request, default);
+        var approver = Guid.NewGuid();
+        orders.ControllerContext = new() { HttpContext = new Microsoft.AspNetCore.Http.DefaultHttpContext
+        {
+            User = new System.Security.Claims.ClaimsPrincipal(new System.Security.Claims.ClaimsIdentity(
+                [new(System.Security.Claims.ClaimTypes.NameIdentifier, approver.ToString()), new(System.Security.Claims.ClaimTypes.Name, "Financeiro QA")], "test"))
+        } };
+        Assert.IsType<NoContentResult>(await orders.Approve(second.Id, default));
+        Assert.Equal(approver, second.ApprovedById);
+        Assert.IsType<OkObjectResult>(await production.Create(plan with { OrderNumber = second.Number }, default));
+        Assert.IsType<ConflictObjectResult>(await orders.Bill(second.Id, default));
+
         var loads = new DeliveryLoadsController(db);
         var created = await loads.Create(new CreateDeliveryLoadRequest(DateOnly.FromDateTime(DateTime.Today),
             region.Id, null, "QA", null, [order.Id]), default);
@@ -61,9 +91,6 @@ public sealed class PostgresWorkflowTests
         var updated = await loads.Update(load.Id, new UpdateDeliveryLoadRequest(load.ScheduledDate, region.Id, null, "QA editado", null, [order.Id]), default);
         Assert.IsType<OkObjectResult>(updated.Result);
         Assert.Equal(linkId, (await db.DeliveryLoadOrders.SingleAsync(x => x.OrderId == order.Id)).Id);
-        db.StockMovements.Add(new StockMovement { ProductId = product.Id, Kind = StockMovementKind.Count, Quantity = 10,
-            Unit = "FD", SourceKey = "qa-initial", RecordedBy = "QA", Reason = "Contagem inicial" });
-        await db.SaveChangesAsync();
         Assert.IsType<NoContentResult>(await loads.Dispatch(load.Id, default));
         Assert.IsType<ConflictObjectResult>(await loads.Delete(load.Id, default));
         Assert.IsType<ConflictObjectResult>(await loads.Dispatch(load.Id, default));

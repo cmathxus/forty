@@ -20,7 +20,7 @@ public sealed class InventoryController(AppDbContext db) : ControllerBase
             .Select(x => new { Id = x.Key, Quantity = x.Sum(m => m.Quantity) }).ToDictionaryAsync(x => x.Id, x => x.Quantity, ct);
         var products = await db.Products.AsNoTracking().Where(x => x.IsActive).OrderBy(x => x.Code)
             .Select(x => new { x.Id, x.Code, x.Name, x.Unit }).ToListAsync(ct);
-        var movements = await db.StockMovements.AsNoTracking().Where(x => User.IsInRole(AccessRules.Admin)).OrderByDescending(x => x.CreatedAt).Take(100)
+        var movements = await db.StockMovements.AsNoTracking().Where(x => AccessRules.Has(User, "stock.manage")).OrderByDescending(x => x.CreatedAt).Take(100)
             .Select(x => new { x.Id, x.ProductId, Code = x.Product!.Code, ProductName = x.Product.Name,
                 x.Unit, x.Kind, x.Quantity, x.Reason, x.RecordedBy, x.CreatedAt, x.DeliveryLoadId, x.ProductionDate }).ToListAsync(ct);
         return Ok(new { Items = products.Select(x => new { x.Id, x.Code, x.Name, x.Unit,

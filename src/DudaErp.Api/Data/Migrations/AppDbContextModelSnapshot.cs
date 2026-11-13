@@ -32,8 +32,20 @@ namespace DudaErp.Api.Data.Migrations
                         .HasPrecision(18, 2)
                         .HasColumnType("numeric(18,2)");
 
+                    b.Property<DateTimeOffset?>("CheckedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CheckedBy")
+                        .HasColumnType("text");
+
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CreatedBy")
+                        .HasColumnType("text");
+
+                    b.Property<Guid?>("CreatedById")
+                        .HasColumnType("uuid");
 
                     b.Property<string>("Description")
                         .IsRequired()
@@ -43,6 +55,9 @@ namespace DudaErp.Api.Data.Migrations
                         .HasColumnType("date");
 
                     b.Property<string>("Notes")
+                        .HasColumnType("text");
+
+                    b.Property<string>("PaidBy")
                         .HasColumnType("text");
 
                     b.Property<DateOnly?>("PaidDate")
@@ -74,6 +89,9 @@ namespace DudaErp.Api.Data.Migrations
                         .HasPrecision(18, 2)
                         .HasColumnType("numeric(18,2)");
 
+                    b.Property<Guid?>("BilledOrderId")
+                        .HasColumnType("uuid");
+
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -104,6 +122,9 @@ namespace DudaErp.Api.Data.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("BilledOrderId")
+                        .IsUnique();
+
                     b.HasIndex("CustomerId");
 
                     b.HasIndex("DueDate");
@@ -119,6 +140,9 @@ namespace DudaErp.Api.Data.Migrations
 
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<string[]>("CustomPermissions")
+                        .HasColumnType("text[]");
 
                     b.Property<string>("Email")
                         .IsRequired()
@@ -418,6 +442,18 @@ namespace DudaErp.Api.Data.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
+                    b.Property<DateTimeOffset?>("ApprovedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("ApprovedBy")
+                        .HasColumnType("text");
+
+                    b.Property<Guid?>("ApprovedById")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset?>("BilledAt")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -439,6 +475,9 @@ namespace DudaErp.Api.Data.Migrations
                     b.Property<string>("PaymentCondition")
                         .HasMaxLength(40)
                         .HasColumnType("character varying(40)");
+
+                    b.Property<bool>("RequiresCommercialWorkflow")
+                        .HasColumnType("boolean");
 
                     b.Property<Guid>("SellerId")
                         .HasColumnType("uuid");
@@ -632,6 +671,12 @@ namespace DudaErp.Api.Data.Migrations
                     b.Property<long>("Number")
                         .HasColumnType("bigint");
 
+                    b.Property<Guid?>("OrderId")
+                        .HasColumnType("uuid");
+
+                    b.Property<long?>("OrderNumber")
+                        .HasColumnType("bigint");
+
                     b.Property<DateOnly?>("ProductionDate")
                         .HasColumnType("date");
 
@@ -651,6 +696,8 @@ namespace DudaErp.Api.Data.Migrations
 
                     b.HasIndex("Number")
                         .IsUnique();
+
+                    b.HasIndex("OrderId");
 
                     b.HasIndex("RequestId")
                         .IsUnique();

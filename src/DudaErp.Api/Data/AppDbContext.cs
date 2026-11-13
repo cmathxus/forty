@@ -60,6 +60,8 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
         modelBuilder.Entity<DeliveryLoad>().HasIndex(x => x.Number).IsUnique();
         modelBuilder.Entity<DeliveryLoadOrder>().HasIndex(x => x.OrderId).IsUnique();
         modelBuilder.Entity<AccountReceivable>().HasIndex(x => x.DueDate);
+        modelBuilder.Entity<AccountReceivable>().HasIndex(x => x.BilledOrderId).IsUnique();
+        modelBuilder.Entity<ProductionPlan>().HasIndex(x => x.OrderId);
         modelBuilder.Entity<AccountPayable>().HasIndex(x => x.DueDate);
 
         modelBuilder.Entity<Seller>().Property(x => x.Email).HasMaxLength(200);
