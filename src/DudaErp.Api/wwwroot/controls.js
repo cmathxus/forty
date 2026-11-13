@@ -48,7 +48,8 @@
     control.positionDropdown = () => {
       const headerHeight = control.dropdown.querySelector('.dropdown-input-wrap')?.offsetHeight || 0;
       const height = Math.min(330, (control.dropdown_content.scrollHeight || 245) + headerHeight + 18);
-      const placement = placeControlPopup(control.dropdown, control.control, control.control.getBoundingClientRect().width, height);
+      const width = Math.max(220, control.control.getBoundingClientRect().width);
+      const placement = placeControlPopup(control.dropdown, control.control, width, height);
       control.dropdown_content.style.maxHeight = `${Math.max(0, placement.maxHeight - headerHeight - 18)}px`;
     };
     field.setAttribute('aria-hidden', 'true');

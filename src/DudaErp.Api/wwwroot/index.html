@@ -221,17 +221,17 @@
         <div class="form-actions wide"><button class="wide" type="button" data-cancel-edit="order">Cancelar</button><button class="primary wide" type="submit">Salvar pedido</button></div>
       </form>
 
-      <div class="panel list-filter-panel">
-        <div class="list-toolbar">
-          <label>Buscar pedido<input id="orderSearch" type="search" placeholder="Número, cliente ou vendedor"></label>
+      <div class="panel order-filters" role="search" aria-label="Filtrar pedidos">
+        <div class="order-filter-grid">
+          <label class="order-filter-search">Buscar pedido<input id="orderSearch" type="search" placeholder="Número, cliente ou vendedor"></label>
           <label>Situação<select id="orderStatusFilter"><option value="">Todas</option><option value="Draft">Pendente</option><option value="Confirmed">Confirmado</option><option value="Scheduled">Em carga</option><option value="Delivered">Entregue</option><option value="PartiallyDelivered">Entrega parcial</option><option value="Returned">Retornado</option></select></label>
-          <label>Aprovação<select id="orderApprovalFilter"><option value="">Todos os pedidos</option><option value="true">Aprovados</option><option value="false">Sem aprovação</option></select></label>
+          <label>Aprovação<select id="orderApprovalFilter"><option value="">Todas</option><option value="true">Aprovados</option><option value="false">Sem aprovação</option></select></label>
           <label>Entrega<select id="orderDeliveryFilter"><option value="">Todas</option><option value="true">Entregues</option><option value="false">Não entregues por completo</option></select></label>
-          <span id="orderCount" role="status"></span>
+          <button id="clearOrderFilters" class="text-button order-filter-clear" type="button">Limpar filtros</button>
         </div>
       </div>
       <div class="panel list-panel">
-        <div class="section-title wide"><h3>Pedidos</h3></div>
+        <div class="section-title wide"><h3>Pedidos</h3><span id="orderCount" role="status"></span></div>
         <div id="ordersList" class="list"></div>
         <button id="moreOrders" type="button" hidden>Mostrar mais pedidos</button>
       </div>

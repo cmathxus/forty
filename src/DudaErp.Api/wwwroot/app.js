@@ -1304,6 +1304,14 @@ function wireActions() {
     refreshAll().catch(error => toast(error.message));
   });
   Object.values(orderListFilters).forEach(selector => $(selector).addEventListener('change', () => refreshList('orders', 1).catch(error => toast(error.message))));
+  $('#clearOrderFilters').addEventListener('click', () => {
+    const page = listPage('orders');
+    clearTimeout(page.timer);
+    page.search = '';
+    $('#orderSearch').value = '';
+    resetOrderSelectFilters();
+    refreshList('orders', 1).catch(error => toast(error.message));
+  });
   window.addEventListener("unhandledrejection", event => {
     toast(event.reason?.message || "Não foi possível concluir a operação.");
     event.preventDefault();

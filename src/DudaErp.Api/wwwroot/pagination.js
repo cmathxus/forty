@@ -99,17 +99,21 @@ function wireListPagination() {
   }
 }
 
+function resetOrderSelectFilters() {
+  for (const selector of Object.values(orderListFilters)) {
+    const field = $(selector);
+    field.value = '';
+    window.FortyControls?.syncSelect(field);
+  }
+}
+
 function clearListPagination() {
   for (const [key, page] of Object.entries(listPages)) {
     clearTimeout(page.timer); page.generation++; page.items = []; page.total = 0; page.page = 1;
     page.totalPages = 1; page.search = ''; page.error = false; page.loading = false;
     const input = key === 'orders' ? $('#orderSearch') : key === 'users' ? $('#userSearch') : $(`[data-filter='${key}']`);
     if (input) input.value = '';
-    if (key === 'orders') for (const selector of Object.values(orderListFilters)) {
-      const field = $(selector);
-      field.value = '';
-      window.FortyControls?.syncSelect(field);
-    }
+    if (key === 'orders') resetOrderSelectFilters();
     $(`#${key}Pagination`)?.remove();
   }
 }
